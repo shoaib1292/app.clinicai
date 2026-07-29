@@ -1,0 +1,199 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { ImageSlider } from '@/components/ui/image-slider'
+import { Loader2, ArrowRight, Shield } from 'lucide-react'
+import { toast } from 'sonner'
+
+const demoAccounts = [
+  { email: 'admin@clinicsai.pk', label: 'Platform Admin', desc: 'Manage LLM keys, pricing, all clinics' },
+  { email: 'sales@clinicsai.pk', label: 'Platform Sales', desc: 'Leads + platform calendar' },
+  { email: 'finance@clinicsai.pk', label: 'Platform Finance', desc: 'Payment proofs, invoices, ledger' },
+  { email: 'admin@al-shifa.pk', label: 'Clinic Admin', desc: 'Al-Shifa Family Clinic' },
+  { email: 'reception@al-shifa.pk', label: 'Receptionist', desc: 'Al-Shifa live queue' },
+  { email: 'doctor0@al-shifa.pk', label: 'Doctor', desc: 'Dr. Ahmed General' },
+]
+
+const images = [
+  'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=900&auto=format&fit=crop&q=60',
+  'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=900&auto=format&fit=crop&q=60',
+  'https://images.unsplash.com/photo-1666214280557-f1b5022eb634?w=900&auto=format&fit=crop&q=60',
+  'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=900&auto=format&fit=crop&q=60',
+]
+
+const formVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.15 },
+  },
+}
+
+const itemVariants = {
+  hidden: { y: 16, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { type: 'spring', stiffness: 100, damping: 12 },
+  },
+}
+
+export function LoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState('admin@clinicsai.pk')
+  const [password, setPassword] = useState('ClinicAI@2026')
+  const [loading, setLoading] = useState(false)
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const json = await res.json()
+      if (!json.ok) {
+        toast.error(json.error || 'Login failed')
+        setLoading(false)
+        return
+      }
+      toast.success(`Welcome, ${json.data.name}!`)
+      router.push(json.data.redirectTo)
+      router.refresh()
+    } catch {
+      toast.error('Network error')
+      setLoading(false)
+    }
+  }
+
+  function fillDemo(em: string) {
+    setEmail(em)
+    setPassword('ClinicAI@2026')
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <motion.div
+        className="w-full max-w-5xl h-auto min-h-[640px] md:h-[700px] grid grid-cols-1 md:grid-cols-2 rounded-2xl overflow-hidden shadow-2xl border"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      >
+        {/* Left: Image slider — clinic atmosphere */}
+        <div className="hidden md:block relative">
+          <ImageSlider images={images} interval={5000} />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute bottom-8 left-8 right-8 text-white">
+            <h2 className="text-2xl font-bold tracking-tight">ClinicAI</h2>
+            <p className="text-sm text-white/80 mt-1">
+              AI-powered receptionist for your clinic. Bookings, reminders, follow-ups — 24/7.
+            </p>
+          </div>
+        </div>
+
+        {/* Right: Login form */}
+        <div className="w-full h-full bg-card flex flex-col items-center justify-center p-8 md:p-12">
+          <motion.div
+            className="w-full max-w-sm"
+            variants={formVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            {/* Mobile logo */}
+            <div className="md:hidden mb-6 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+                <Shield className="w-5 h-5 text-primary-foreground" />
+              </div>
+            </div>
+
+            <motion.h1 variants={itemVariants} className="text-3xl font-bold tracking-tight mb-1.5">
+              Staff Login
+            </motion.h1>
+            <motion.p variants={itemVariants} className="text-muted-foreground mb-8">
+              Sign in to your ClinicAI dashboard
+            </motion.p>
+
+            <motion.form variants={itemVariants} onSubmit={onSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@clinic.pk"
+                  required
+                  autoComplete="email"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                    Forgot?
+                  </Link>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>Sign in <ArrowRight className="w-4 h-4" /></>
+                )}
+              </Button>
+            </motion.form>
+
+            <motion.p variants={itemVariants} className="text-center text-sm text-muted-foreground mt-6">
+              No account?{' '}
+              <Link href="/signup" className="font-medium text-primary hover:underline">
+                Create clinic account
+              </Link>
+            </motion.p>
+          </motion.div>
+
+          {/* Demo accounts */}
+          <motion.div
+            variants={itemVariants}
+            className="w-full max-w-sm mt-8 pt-6 border-t"
+          >
+            <p className="text-xs text-muted-foreground mb-3">Demo accounts (click to fill)</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {demoAccounts.map((a) => (
+                <button
+                  key={a.email}
+                  type="button"
+                  onClick={() => fillDemo(a.email)}
+                  className="text-left p-2 rounded-md hover:bg-accent transition-colors border border-transparent hover:border-border"
+                >
+                  <div className="text-xs font-medium truncate">{a.label}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{a.email}</div>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2 text-center">
+              Password: <span className="font-mono text-primary">ClinicAI@2026</span>
+            </p>
+          </motion.div>
+        </div>
+      </motion.div>
+    </div>
+  )
+}

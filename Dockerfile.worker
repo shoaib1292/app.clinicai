@@ -1,0 +1,50 @@
+# ── Stage 1: Install dependencies ──
+FROM oven/bun:1 AS builder
+
+WORKDIR /app
+
+# Copy package manifests
+COPY package.json bun.lock ./
+COPY prisma ./prisma/
+
+# Install ALL dependencies
+RUN bun install --frozen-lockfile
+
+# Generate Prisma client
+RUN bunx prisma generate
+
+# Copy worker source
+COPY tsconfig.json ./
+COPY worker/ ./worker/
+COPY src/lib/ ./src/lib/
+
+# ── Stage 2: Production runtime ──
+FROM oven/bun:1 AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy dependencies + Prisma client
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy worker code
+COPY --from=builder /app/worker ./worker
+COPY --from=builder /app/src/lib ./src/lib
+
+# Copy .env.example as reference
+COPY .env.example .env.example
+
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+# Run the worker index
+CMD ["bun", "worker/index.ts"]

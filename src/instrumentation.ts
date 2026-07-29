@@ -1,0 +1,23 @@
+import * as Sentry from '@sentry/nextjs'
+
+export async function register() {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('../sentry.server.config')
+
+    // Boot guard: fail fast if production secrets are missing.
+    // (auth.ts also throws at module load, this is defense-in-depth + clear message.)
+    if (process.env.NODE_ENV === 'production') {
+      const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'APP_ENCRYPTION_KEY', 'PHONE_HASH_SALT']
+      const missing = required.filter((k) => !process.env[k])
+      if (missing.length) {
+        throw new Error(`Missing required env vars in production: ${missing.join(', ')}`)
+      }
+    }
+  }
+
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    await import('../sentry.edge.config')
+  }
+}
+
+export const onRequestError = Sentry.captureRequestError

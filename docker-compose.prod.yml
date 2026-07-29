@@ -1,0 +1,95 @@
+version: "3.8"
+
+# Production Docker Compose — uses external PostgreSQL and Redis via URLs from .env
+# Run: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  # --- Landing Page (clinicai.pk) ---
+  landing:
+    build:
+      context: .
+      dockerfile: clinicai-landing/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_SITE_URL=https://clinicai.pk
+    volumes:
+      - landing_data:/app/data/blog
+      - landing_public_blog:/app/public/blog
+    networks:
+      - clinicai
+
+  # --- Main Web App (app.clinicai.pk) ---
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - STORE_TYPE=redis
+      - PORT=3000
+    networks:
+      - clinicai
+
+  # --- Realtime Socket.io Service ---
+  realtime:
+    build:
+      context: ./mini-services/realtime
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    env_file: .env
+    networks:
+      - clinicai
+
+  # --- BullMQ Worker ---
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - STORE_TYPE=redis
+    depends_on:
+      - app
+    networks:
+      - clinicai
+
+  # --- Caddy Reverse Proxy ---
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-app.clinicai.pk}
+      - APP_DOMAIN=${APP_DOMAIN:-app.clinicai.pk}
+      - API_DOMAIN=${API_DOMAIN:-api.clinicai.pk}
+    depends_on:
+      - app
+    networks:
+      - clinicai
+
+volumes:
+  caddy_data:
+  caddy_config:
+  landing_data:
+  landing_public_blog:
+
+networks:
+  clinicai:
+    driver: bridge

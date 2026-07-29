@@ -1,0 +1,1590 @@
+// ClinicAI — Prisma Schema (v2)
+// Multi-tenant WhatsApp-first clinic automation platform
+// Multi-tenant WhatsApp-first clinic automation platform.
+// PostgreSQL 16 for production. Schema designed for PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum AppointmentStatus {
+  held
+  booked
+  confirmed
+  completed
+  cancelled
+  no_show
+  late_no_show
+  invalid
+}
+
+enum Gender {
+  male
+  female
+  unknown
+}
+
+enum QueueMode {
+  token
+  time
+  hybrid
+}
+
+enum SlotStatus {
+  open
+  held
+  booked
+  blocked
+}
+
+enum PaymentProofStatus {
+  pending
+  verified
+  confirmed
+  rejected
+}
+
+enum PaymentProofLedgerType {
+  clinic_topup
+  patient_payment
+}
+
+enum MessageDirection {
+  in
+  out
+}
+
+enum MessageType {
+  text
+  image
+  audio
+  button
+  template
+  voice
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  running
+  paused
+  completed
+  cancelled
+}
+
+enum CreditLedgerType {
+  debit
+  credit
+}
+
+// ============================================================================
+// PLATFORM LAYER
+// ============================================================================
+
+model PlatformAdmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  twoFactorSecret String?         // encrypted TOTP secret
+  twoFactorBackupCodes String?    // JSON array of hashed backup codes
+  twoFactorPendingSetup String?   // encrypted setup data (secret + backup codes) pending verification
+  twoFactorEnabled Boolean @default(false)
+  twoFactorMethod  String  @default("totp") // totp | whatsapp
+  phone            String?
+  role         String   @default("super_admin") // super_admin
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+  updatedAt    DateTime @updatedAt
+
+  auditLogs    AuditLog[]
+  platformAppointments PlatformAppointment[]
+  llmKeys      LLMKey[]
+  dailyApiKeys DailyApiKey[]
+  pricingRules PricingRule[]
+}
+
+model PlatformStaff {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  twoFactorSecret String?
+  twoFactorBackupCodes String?
+  twoFactorPendingSetup String?
+  twoFactorEnabled Boolean @default(false)
+  twoFactorMethod  String  @default("totp") // totp | whatsapp
+  phone            String?
+  role         String   // sales | onboarding | support | finance
+  scopes       String   @default("[]") // JSON array of scope strings
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+  updatedAt    DateTime @updatedAt
+
+  platformAppointments PlatformAppointment[] @relation("StaffAppointments")
+  leads        Lead[]
+  auditLogs    AuditLog[]
+}
+
+model PlatformAppointment {
+  id          String   @id @default(cuid())
+  staffId     String?  // null = defaults to platform admin
+  adminId     String?  // platform admin if no staff assigned
+  clinicId    String?
+  purpose     String   // sales | onboarding | support | demo | check_in | training
+  start       DateTime
+  end         DateTime
+  status      String   @default("scheduled") // scheduled | completed | cancelled | no_show
+  notes       String?
+  location    String   @default("online") // online | onsite
+  meetLink    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt    DateTime?
+
+  staff       PlatformStaff? @relation("StaffAppointments", fields: [staffId], references: [id])
+  admin       PlatformAdmin? @relation(fields: [adminId], references: [id])
+  clinic      Clinic?        @relation(fields: [clinicId], references: [id])
+
+  @@index([staffId, start])
+  @@index([clinicId, start])
+}
+
+// ============================================================================
+// CLINIC LAYER (tenant root)
+// ============================================================================
+
+model Clinic {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  timezone      String   @default("Asia/Karachi")
+  currency      String   @default("PKR")
+  status        String   @default("active") // active | suspended | trial | churned
+  city          String?
+  phone         String? // calling / landline number (no forced country code)
+  whatsappNumber String? // clinic WhatsApp business number (defaults to +92)
+  address       String?
+  logoUrl       String?
+
+  // Clinic-wide default working hours (JSON: {mon:{start,end,breaks:[{start,end}]},...})
+  // Per-doctor workingHours override this per day. Mirrors Doctor.workingHours contract.
+  workingHours  String  @default("{}")
+
+  // WhatsApp modes
+  metaConnected     Boolean @default(false)
+  evolutionConnected Boolean @default(false)
+  evolutionInstance String?
+  metaPhoneId       String?
+  metaWabaId        String?
+
+  // Online payments opt-in
+  onlinePaymentsEnabled Boolean @default(false)
+
+  // Fee display: fold doctor fee into single "Appointment with Dr X" line
+  combineFees Boolean @default(false) // show doctor fee folded into appointment line
+
+  // Feature toggles
+  pharmacyEnabled Boolean @default(false)
+  inventoryEnabled Boolean @default(false)
+
+  // Agent config (v2 NEW)
+  agentEnabled   Boolean  @default(true)
+  agentName      String   @default("Sana")
+  agentGender    String   @default("female") // male | female
+  agentTone      String   @default("friendly") // formal | friendly
+  agentLanguages String   @default("urdu,english,roman-urdu") // comma-separated
+  agentWelcome   String   @default("Asalamualaikum! Main aap ki madad kar sakti hoon. Appointment lena hai?")
+  agentFallback  String   @default("Mujhe is baare me maloom nahi, clinic se confirm karwa lein.")
+  agentPersona   String   @default("{}") // JSON
+  agentMode      String   @default("single") // single | multi
+
+  // Settlement
+  settlementMode String   @default("credit") // credit | invoice | hybrid
+  creditBalance  Int      @default(0) // PKR
+
+  // Fraud control (screenshot payment model)
+  // fakeProofCount: how many confirmed-fake screenshots this clinic has submitted.
+  // requirePreVerify: once true, top-up credits are HELD until platform confirms
+  //   (no credit released on submit).
+  // heldUntil: when a fake screenshot is rejected, future top-ups stay HELD and
+  //   the held window auto-clears (and any pending held proofs auto-credit) after
+  //   this timestamp — 3 days per the agreed model.
+  fakeProofCount  Int      @default(0)
+  requirePreVerify Boolean @default(false)
+  lastFakeAt      DateTime?
+  heldUntil       DateTime?
+
+  // Trial / promo
+  trialEndsAt    DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt       DateTime?
+
+  // Relations
+  admins         ClinicAdmin[]
+  doctors        Doctor[]
+  doctorCovers   DoctorCover[]
+  receptionists  Receptionist[]
+  patients       Patient[]
+  services       Service[]
+  appointments   Appointment[]
+  conversations  Conversation[]
+  paymentProofs  PaymentProof[]
+  creditLedger   CreditLedger[]
+  invoices       Invoice[]
+  pricingRules   PricingRule[]
+  bankAccounts   ClinicBankAccount[]
+  whatsappConnections WhatsAppConnection[]
+  agentToggle   AgentToggle?
+  platformAppointments PlatformAppointment[]
+  leads          Lead[]
+  llmCallLogs    LLMCallLog[]
+  feedback       AppointmentFeedback[]
+  quickReplySnippets QuickReplySnippet[]
+  auditLogs      AuditLog[]
+  slots          Slot[]
+  campaigns      Campaign[]
+  campaignMessages CampaignMessage[]
+  paymentTokens  PaymentToken[]
+  metaTemplateCaches MetaTemplateCache[]
+  automationRules AutomationRule[]
+  pharmacyFeatures ClinicFeature[]
+  pharmacyProducts PharmacyProduct[]
+  pharmacyStockBatches PharmacyStockBatch[]
+  suppliers Supplier[]
+  purchaseOrders PurchaseOrder[]
+  prescriptions Prescription[]
+  pharmacySales PharmacySale[]
+
+  // Patient Portal branding
+  brandingPrimaryColor   String?
+  brandingSecondaryColor String?
+  patientPortalEnabled   Boolean  @default(false)
+}
+
+model ClinicAdmin {
+  id           String   @id @default(cuid())
+  clinicId     String
+  email        String   @unique
+  name         String
+  passwordHash String
+  twoFactorSecret String?
+  twoFactorBackupCodes String?
+  twoFactorPendingSetup String?
+  twoFactorEnabled Boolean @default(false)
+  twoFactorMethod  String  @default("totp") // totp | whatsapp
+  phone        String?
+  emailVerified DateTime?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  auditLogs    AuditLog[]
+}
+
+model ClinicBankAccount {
+  id             String   @id @default(cuid())
+  clinicId       String
+  bankName       String
+  accountTitle   String
+  accountNumber  String
+  iban           String?
+  walletType     String?  // easypaisa | jazzcash | other
+  walletNumber   String?
+  isDefault      Boolean  @default(false)
+  instructionsText String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  clinic         Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, isDefault])
+}
+
+// ============================================================================
+// DOCTORS / RECEPTIONISTS / SCHEDULES
+// ============================================================================
+
+model Doctor {
+  id             String   @id @default(cuid())
+  clinicId       String
+  name           String
+  gender         Gender   @default(male)
+  speciality     String
+  qualifications String?
+  slotDurationMin Int     @default(15)
+  queueMode      QueueMode @default(hybrid)
+  currentStatus  String   @default("off") // in_clinic | break | off | on_way
+  statusEta      Int?     // minutes, if on_way/break
+  workingHours   String   @default("{}") // JSON: {mon:{start,end,breaks:[]},...}
+  phone          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt       DateTime?
+
+  clinic         Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  services       Service[]
+  schedules      Schedule[]
+  scheduleOverrides ScheduleOverride[]
+  slots          Slot[]
+  appointments   Appointment[]
+  feedback       AppointmentFeedback[]
+  prescriptions  Prescription[]
+  passwordHash   String?  // optional login
+  email          String?  // optional login
+  coveredBy      DoctorCover[] @relation("CoveredDoctor")
+  coveringFor    DoctorCover[] @relation("CoveringDoctor")
+
+  @@index([clinicId, active])
+}
+
+model Receptionist {
+  id           String   @id @default(cuid())
+  clinicId     String
+  email        String   @unique
+  name         String
+  passwordHash String
+  phone        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  auditLogs    AuditLog[]
+}
+
+model Service {
+  id           String   @id @default(cuid())
+  clinicId     String
+  name         String
+  durationMin  Int      @default(15)
+  baseFee      Int      @default(0) // PKR
+  doctorId     String?
+  description  String?
+  isSurgery    Boolean  @default(false)
+  requiredResources String? @default("[]") // JSON array of resources/equipment
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor       Doctor?  @relation(fields: [doctorId], references: [id])
+  appointments Appointment[]
+
+  @@index([clinicId, doctorId])
+  @@index([clinicId, active])
+}
+
+model Schedule {
+  id           String   @id @default(cuid())
+  doctorId     String
+  dayOfWeek    Int      // 0=Sun ... 6=Sat
+  startTime    String   // "09:00"
+  endTime      String   // "17:00"
+  breakWindows String   @default("[]") // JSON
+  isEmergency  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  doctor       Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, dayOfWeek])
+}
+
+model ScheduleOverride {
+  id           String   @id @default(cuid())
+  doctorId     String
+  date         DateTime
+  type         String   // block | emergency | leave
+  startTime    String?
+  endTime      String?
+  reason       String?
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  doctor       Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, date])
+}
+
+model DoctorCover {
+  id                String    @id @default(cuid())
+  clinicId          String
+  coveredDoctorId   String    // doctor being covered (on leave/gone)
+  coveringDoctorId  String    // doctor filling in
+  type              String    // temporary | permanent
+  startDate         DateTime
+  endDate           DateTime? // null = indefinite
+  transferAppointments Boolean @default(false)
+  reason            String?
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  clinic            Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  coveredDoctor     Doctor    @relation("CoveredDoctor", fields: [coveredDoctorId], references: [id])
+  coveringDoctor    Doctor    @relation("CoveringDoctor", fields: [coveringDoctorId], references: [id])
+
+  @@index([clinicId, coveredDoctorId, active])
+  @@index([clinicId, coveringDoctorId, active])
+}
+
+model Slot {
+  id           String   @id @default(cuid())
+  doctorId     String
+  clinicId     String
+  date         DateTime
+  startTime    String   // "10:30"
+  endTime      String   // "10:45"
+  durationMin  Int      @default(15) // the slot duration used for generation
+  tokenNo      Int?
+  status       SlotStatus @default(open)
+  holdExpiresAt DateTime?
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  doctor       Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment  Appointment?
+
+  @@index([clinicId, doctorId, date, status])
+  @@index([clinicId, date])
+}
+
+// ============================================================================
+// PATIENTS (tenant-scoped)
+// ============================================================================
+
+model Patient {
+  id           String   @id @default(cuid())
+  clinicId     String
+  phoneHash    String   // sha256(phone+clinicSalt)
+  phoneLast4   String
+  phone        String   // sandbox: plaintext for testing; production: encrypted
+  name         String?
+  gender       Gender   @default(unknown)
+  preferredLanguage String @default("urdu") // urdu | english | roman-urdu
+  preferredModality String @default("auto") // text | voice | auto
+  metadata     String   @default("{}") // JSON
+  email        String?  // optional patient email — used for transactional + emergency bulk email (Brevo). No marketing.
+  optInMarketing Boolean @default(false)
+  totalVisits  Int      @default(0)
+  noShowCount  Int      @default(0)
+  invalidBookingCount Int @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  appUserId    String?   // FK to PatientAppUser (optional, for app-registered patients)
+  clinic       Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  familyMembers PatientFamilyMember[]
+  appointments Appointment[]
+  conversations Conversation[]
+  feedback     AppointmentFeedback[]
+  pharmacySales PharmacySale[]
+  prescriptions Prescription[]
+  memories      PatientMemory[] @relation("PatientMemories")
+  appUser      PatientAppUser? @relation(fields: [appUserId], references: [id])
+
+  @@unique([clinicId, phoneHash])
+  @@index([clinicId, phoneLast4])
+  @@index([clinicId, name])
+  @@index([clinicId, noShowCount])
+  @@index([clinicId, createdAt])
+}
+
+// ============================================================================
+// PATIENT APP USER — One phone identity across multiple clinics.
+// When a patient downloads the app, they verify once via WhatsApp OTP
+// and can then chat/book at ALL clinics where they're registered.
+// ============================================================================
+
+model PatientAppUser {
+  id        String    @id @default(cuid())
+  phone     String    @unique     // normalized +923001234567
+  phoneHash String    @unique     // sha256(phone)
+  patients  Patient[]
+  fcmToken  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model PatientMagicLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  appUserId String
+  clinicId  String
+  phone     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([appUserId, clinicId])
+}
+
+// ============================================================================
+// SMART AGENT MEMORY (learned, long-term, cheap to inject)
+//   - PatientMemory: per-patient compressed insights the agent "remembers"
+//     across conversations. Persisted once per patient per day (nightly
+//     learning loop), injected as 1-2 lines per message -> almost FREE tokens.
+//   - ClinicLearning: platform-level self-learning outcomes (what phrasing /
+//     reminder cadence / slot suggestion actually drives bookings & cuts
+//     no-shows). One row per clinic per day, trained on that day's outcomes.
+// ============================================================================
+
+model PatientMemory {
+  id           String   @id @default(cuid())
+  clinicId     String
+  patientId    String
+  // Compressed, human-readable insight string (e.g. "Prefers morning slots;
+  // scared of injections; responds well to Urdu; 2 no-shows -> needs extra
+  // reminder; wife Ayesha books for him"). Kept <= 500 chars on purpose.
+  insight      String   @default("")
+  // Structured risk signals extracted from history (no LLM needed at runtime)
+  riskSignals Json     @default("{}") // { noShowCount, noShowRate, lastNoShowDaysAgo, preferredSlot, language, modality, prepayRequired }
+  // 0-100; higher = more likely to no-show. Drives adaptive reminders.
+  noShowRisk   Int      @default(0)
+  lastLearnedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  patient      Patient  @relation("PatientMemories", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, patientId])
+  @@index([clinicId, patientId])
+  @@index([clinicId, noShowRisk])
+}
+
+model ClinicLearning {
+  id           String   @id @default(cuid())
+  clinicId     String
+  // ISO date (YYYY-MM-DD) — one learning snapshot per clinic per day.
+  date         String
+  // What actually worked today, in plain language the agent injects at runtime.
+  // e.g. "Urdu voice reminders lifted show-rate 12% vs text; evening slots
+  // book fastest when suggested first; patients with >=2 no-shows convert only
+  // after a prepay nudge."  <= 1500 chars.
+  learning     String   @default("")
+  // Numeric signal the agent can use to adapt without re-reading raw stats.
+  metrics      Json     @default("{}") // { bookingsToday, shows, noShows, reminderShowLiftPct, bestSlotWindow, bestChannel }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([clinicId, date])
+  @@index([clinicId, date])
+}
+
+model PatientFamilyMember {
+  id           String   @id @default(cuid())
+  patientId    String
+  clinicId     String
+  name         String
+  gender       Gender   @default(unknown)
+  relation     String   // self | spouse | child | parent | sibling | other
+  notes        String?
+  reminderNeeded   Boolean?   // null=not yet asked, true=patient wants reminder, false=patient declined
+  reminderReason   String?    // "user_requested" | "history_prompted_accepted" | null
+  reminderLeadTime String?    // e.g. "30m", "1h", "1d" — lead time before appointment
+  ownPatientId String?
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, name])
+  @@index([clinicId, relation])
+}
+
+// ============================================================================
+// APPOINTMENTS & FEES
+// ============================================================================
+
+model Appointment {
+  id           String   @id @default(cuid())
+  clinicId     String
+  patientId    String
+  familyMemberId String?
+  doctorId     String
+  slotId       String?  @unique
+  serviceId    String?
+  start        DateTime
+  end          DateTime
+  status       AppointmentStatus @default(booked)
+  channel      String   @default("whatsapp") // whatsapp | manual | link | platform
+  doctorFee    Int      @default(0)
+  clinicMarkup Int      @default(0) // clinic's extra revenue (bounded by PricingRule markupMin/Max)
+  platformFee  Int      @default(50)
+  totalFee     Int      @default(0)
+  paymentStatus String  @default("pending") // pending | paid | refund_due | refunded
+  paymentMode  String   @default("cash") // cash | online
+  createdByStaffId String?
+  createdVia   String   @default("agent") // agent | receptionist | link | platform
+  metaMsgId    String?
+  checkInTime  DateTime?
+  notes        String?
+  type         String   @default("consultation") // consultation | operation | followup
+  isTelemedicine Boolean @default(false)
+  operationNotes String? // pre-op notes, equipment, instructions for surgery
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  doctor       Doctor   @relation(fields: [doctorId], references: [id])
+  slot         Slot?    @relation(fields: [slotId], references: [id])
+  service      Service? @relation(fields: [serviceId], references: [id])
+  fees         AppointmentFees?
+  paymentProof PaymentProof?
+  paymentToken PaymentToken?
+  reminders    Reminder[]
+  feedback     AppointmentFeedback?
+  dailyRooms   DailyRoom[]
+  pharmacySales PharmacySale[]
+  prescriptions Prescription[]
+
+  @@index([clinicId, status, start])
+  @@index([clinicId, patientId])
+  @@index([clinicId, doctorId, start])
+  @@index([clinicId, createdByStaffId])
+  @@index([clinicId, start])
+  @@index([clinicId, paymentStatus])
+  @@index([clinicId, createdAt])
+}
+
+model AppointmentFees {
+  id           String   @id @default(cuid())
+  appointmentId String @unique
+  baseDoctorFee Int
+  clinicMarkup Int
+  platformFee  Int
+  platformFeeOverride Int?
+  total        Int
+  currency     String   @default("PKR")
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  appointment  Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// CONVERSATIONS & MESSAGES (AI agent + staff)
+// ============================================================================
+
+model Conversation {
+  id           String   @id @default(cuid())
+  clinicId     String
+  patientId    String
+  channel      String   @default("evo") // evo | meta
+  status       String   @default("active") // active | closed | archived
+  lastIntent   String?
+  summary      String?
+  agentPersonaSnapshot String @default("{}") // JSON
+  takenOverBy  String?  // receptionist id if staff took over
+  tags         String   @default("[]") // JSON array
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  messages     Message[]
+
+  @@index([clinicId, patientId, status])
+  @@index([clinicId, status])
+  @@index([clinicId, updatedAt])
+}
+
+model Message {
+  id           String   @id @default(cuid())
+  conversationId String
+  direction    MessageDirection
+  type         MessageType @default(text)
+  body         String
+  transcript   String?  // for voice notes
+  providerMsgId String?
+  agentGenderUsed String?
+  agentLanguageUsed String?
+  ts           DateTime @default(now())
+  deletedAt    DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, ts])
+  @@index([conversationId, direction])
+}
+
+// ============================================================================
+// LLM KEYS & COST TRACKING
+// ============================================================================
+
+model LLMKey {
+  id           String   @id @default(cuid())
+  provider     String   // openai | anthropic | gemini | zai | local
+  alias        String
+  encryptedKey String
+  priority     Int      @default(1)
+  dailyBudgetUsd Float  @default(10)
+  enabled      Boolean  @default(true)
+  model        String   @default("gpt-4o")       // Chat model (text completions)
+  ttsModel     String   @default("tongtong")      // TTS model/voice
+  sttModel     String   @default("whisper-1")     // STT model
+  lastError    String?
+  lastUsedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  addedBy      PlatformAdmin? @relation(fields: [addedById], references: [id])
+  addedById    String?
+  callLogs     LLMCallLog[]
+}
+
+model LLMCallLog {
+  id           String   @id @default(cuid())
+  clinicId     String?
+  keyId        String?
+  model        String
+  tokensIn     Int      @default(0)
+  tokensOut    Int      @default(0)
+  latencyMs    Int      @default(0)
+  costUsd      Float    @default(0)
+  status       String   @default("ok") // ok | error | timeout
+  intent       String?
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  clinic       Clinic?  @relation(fields: [clinicId], references: [id])
+  key          LLMKey?  @relation(fields: [keyId], references: [id])
+
+  @@index([clinicId, createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// DAILY.CO — TELEMEDICINE VIDEO KEYS & ROOMS
+// ============================================================================
+
+model DailyApiKey {
+  id               String    @id @default(cuid())
+  alias            String
+  encryptedKey     String                        // AES-256-GCM encrypted Daily.co API key
+  priority         Int       @default(1)         // lower = used first
+  enabled          Boolean   @default(true)
+  minutesUsedToday Int       @default(0)         // tracked by us, resets daily
+  dailyLimit       Int       @default(300)       // ~300 min/day = ~9000/month (90% of free 10K)
+  resetDate        String?                       // YYYY-MM-DD — when minutesUsedToday was last reset
+  lastError        String?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  addedBy          PlatformAdmin? @relation(fields: [addedById], references: [id])
+  addedById        String?
+  rooms            DailyRoom[]
+
+  @@index([enabled, priority])
+}
+
+model DailyRoom {
+  id              String    @id @default(cuid())
+  roomName        String    @unique              // Daily.co room name
+  roomUrl         String                          // Full Daily.co URL
+  dailyKeyId      String
+  appointmentId   String?                         // Link to Appointment if from telemedicine
+  status          String    @default("created")   // created | active | ended
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationMinutes Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  dailyKey        DailyApiKey  @relation(fields: [dailyKeyId], references: [id])
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([dailyKeyId])
+  @@index([appointmentId])
+}
+
+// ============================================================================
+// BILLING / PAYMENTS
+// ============================================================================
+
+model PaymentProof {
+  id           String   @id @default(cuid())
+  clinicId     String
+  appointmentId String? @unique
+  pharmacySaleId String? @unique
+  ledgerType   PaymentProofLedgerType
+  amount       Int      // PKR
+  payerName    String
+  payerPhone   String?
+  screenshotUrl String
+  uploadedBy   String   // patient | receptionist | agent | admin
+  status       PaymentProofStatus @default(pending)
+  verifiedById String?
+  verifiedAt   DateTime?
+  confirmedBy  String?
+  confirmedAt  DateTime?
+  platformAccountId String?
+  notes        String?
+  vlmAnalyzed      Boolean   @default(false)
+  vlmConfidence    Float?
+  vlmSuspiciousFlags String?
+  vlmDetectedAmount Float?
+  vlmDetectedBank  String?
+  vlmAnalysisJson  String?
+  needsReview      Boolean   @default(false)
+  priority         String    @default("normal")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id])
+  pharmacySale PharmacySale? @relation("PharmacySalePaymentProof", fields: [pharmacySaleId], references: [id])
+  creditLedger CreditLedger[]
+
+  @@index([clinicId, status, ledgerType])
+  @@index([clinicId, status, createdAt])
+  @@index([pharmacySaleId])
+}
+
+// Platform-level payment destination accounts. NOT clinic-scoped — used by
+// all clinics when submitting top-ups so funds land on the platform's accounts.
+model PlatformAccount {
+  id             String   @id @default(cuid())
+  label          String   // e.g. "JazzCash (Platform)"
+  bankName       String
+  accountTitle   String
+  accountNumber  String
+  iban           String?
+  walletType     String?  // easypaisa | jazzcash | other
+  walletNumber   String?
+  instructionsText String?
+  isDefault      Boolean  @default(false)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@index([isDefault])
+}
+
+model PaymentToken {
+  id            String   @id @default(cuid())
+  clinicId      String
+  appointmentId String?  @unique
+  pharmacySaleId String?  @unique
+  amount        Int      // PKR
+  currency      String   @default("PKR")
+  provider      String   @default("jazzcash") // jazzcash | easypaisa | bank_transfer
+  status        String   @default("pending")  // pending | paid | expired | failed
+  token         String   @unique              // unique token for payment link
+  paidAt        DateTime?
+  providerRef   String?                       // JazzCash/Easypaisa transaction reference
+  paidAmount    Int?
+  metadata      String   @default("{}")       // provider-specific response data
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  clinic       Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id])
+  pharmacySale PharmacySale? @relation("PharmacySalePaymentToken", fields: [pharmacySaleId], references: [id])
+
+  @@index([token])
+  @@index([clinicId, status])
+  @@index([appointmentId])
+}
+
+model CreditLedger {
+  id           String   @id @default(cuid())
+  clinicId     String
+  type         CreditLedgerType
+  amount       Int      // PKR
+  reason       String   // appointment_fee | pharmacy_fee | topup | refund | adjustment
+  appointmentId String?
+  pharmacySaleId String? @unique
+  paymentProofId String?
+  balanceAfter Int
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  pharmacySale PharmacySale? @relation("PharmacySaleCreditLedger", fields: [pharmacySaleId], references: [id])
+  paymentProof PaymentProof? @relation(fields: [paymentProofId], references: [id])
+
+  @@index([clinicId, createdAt(sort: Desc)])
+  @@index([clinicId, type, createdAt(sort: Desc)])
+  @@index([pharmacySaleId])
+}
+
+model Invoice {
+  id           String   @id @default(cuid())
+  clinicId     String
+  periodStart  DateTime
+  periodEnd    DateTime
+  totalAppointments Int @default(0)
+  platformFeeTotal Int @default(0)
+  clinicMarkupTotal Int @default(0)
+  metaCostTotal Float  @default(0)
+  status       String   @default("draft") // draft | sent | paid | overdue
+  pdfUrl       String?
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, status, periodStart])
+}
+
+model PricingRule {
+  id           String   @id @default(cuid())
+  clinicId     String?
+  scope        String   @default("global") // global | clinic
+  platformFeeDefault Int @default(50)
+  platformFeeOverride Int?
+  markupMin    Int      @default(0)
+  markupMax    Int      @default(500)
+  markupDefault Int     @default(0) // clinic-level configured markup (clamped to markupMin/Max)
+  billingMode  String   @default("credit") // credit | invoice | hybrid
+  // Pharmacy platform fee — charged per sale IN ADDITION to the appointment fee.
+  // Default founder decision: 1% of pharmacy sale total (per_sale model).
+  pharmacyFeeModel  String  @default("per_sale") // none | per_consult | per_sale | on_margin
+  pharmacyFeePct    Float   @default(1)    // % of sale total (per_sale) or margin (on_margin)
+  pharmacyFeeFixed  Int     @default(0)    // PKR flat (per_sale / per_consult)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic?  @relation(fields: [clinicId], references: [id])
+  createdBy    PlatformAdmin? @relation(fields: [createdById], references: [id])
+  createdById  String?
+}
+
+// ============================================================================
+// AGENT TOGGLE & WHATSAPP CONNECTION
+// ============================================================================
+
+model AgentToggle {
+  id           String   @id @default(cuid())
+  clinicId     String   @unique
+  enabled      Boolean  @default(true)
+  pausedReason String?
+  pausedBy     String?
+  pausedUntil  DateTime?
+  resumedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppConnection {
+  id           String   @id @default(cuid())
+  clinicId     String
+  mode         String   // evo | meta
+  phone        String
+  status       String   @default("disconnected") // connected | disconnected | connecting
+  metaPhoneId  String?
+  metaTokenEnc String?
+  evoInstanceName String?
+  filterGroups Boolean  @default(true)
+  filterStatus Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, status])
+}
+
+// ============================================================================
+// META TEMPLATE CACHE (§6.2) — caches WhatsApp Business API templates
+// ============================================================================
+
+model MetaTemplateCache {
+  id            String   @id @default(cuid())
+  clinicId      String
+  wabaId        String?  // WhatsApp Business Account ID
+  templateId    String   // Meta's template ID
+  name          String   // Template name as registered on Meta
+  language      String   @default("ur")
+  category      String   // marketing | utility | authentication
+  status        String   // approved | pending | rejected | paused
+  body          String   // Template body with {{variables}}
+  headerType    String?  // text | image | video | document
+  headerValue   String?
+  footerText    String?
+  buttons       String   @default("[]") // JSON array of button configs
+  enabled       Boolean  @default(true)
+  lastSyncedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, name, language])
+  @@index([clinicId, status])
+}
+
+// ============================================================================
+// NOTIFICATIONS / REMINDERS
+// ============================================================================
+
+model NotificationTemplate {
+  id           String   @id @default(cuid())
+  clinicId     String?
+  channel      String   @default("whatsapp") // whatsapp | sms | email
+  triggerEvent String   // booking_confirm | reminder_24h | reminder_2h | reminder_30min | cancel | reschedule | no_show_followup | payment_confirm
+  bodyTemplate String
+  language     String   @default("urdu")
+  modality     String   @default("text") // text | voice
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@index([clinicId, triggerEvent, enabled])
+}
+
+model Reminder {
+  id           String   @id @default(cuid())
+  appointmentId String
+  type         String   // reminder_24h | reminder_2h | reminder_30min
+  sendAt       DateTime
+  status       String   @default("pending") // pending | sent | failed
+  channel      String   @default("whatsapp") // whatsapp | email | sms
+  error        String?
+  createdAt    DateTime @default(now())
+  sentAt       DateTime?
+  deletedAt    DateTime?
+
+  appointment  Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId, type])
+  @@index([sendAt, status])
+  @@index([status, sendAt])
+}
+
+// ============================================================================
+// LEADS (landing page capture)
+// ============================================================================
+
+model Lead {
+  id           String   @id @default(cuid())
+  clinicName   String
+  adminName    String
+  whatsappNumber String
+  city         String
+  monthlyAppointments Int?
+  status       String   @default("new") // new | contacted | demo_booked | converted | lost
+  notes        String?
+  claimedByStaffId String?
+  clinicId     String?  // if converted
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  claimedBy    PlatformStaff? @relation(fields: [claimedByStaffId], references: [id])
+  clinic       Clinic?  @relation(fields: [clinicId], references: [id])
+
+  @@index([status, claimedByStaffId])
+  @@index([clinicId, createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// AUDIT & ANALYTICS
+// ============================================================================
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  actorType    String   // platform_admin | platform_staff | clinic_admin | doctor | receptionist | agent
+  clinicId     String?
+  action       String
+  target       String?
+  metadata     String   @default("{}") // JSON
+  ip           String?
+  ts           DateTime @default(now())
+  deletedAt    DateTime?
+
+  platformAdmin PlatformAdmin? @relation(fields: [platformAdminId], references: [id])
+  platformAdminId String?
+  platformStaff PlatformStaff? @relation(fields: [platformStaffId], references: [id])
+  platformStaffId String?
+  clinicAdmin  ClinicAdmin? @relation(fields: [clinicAdminId], references: [id])
+  clinicAdminId String?
+  receptionist Receptionist? @relation(fields: [receptionistId], references: [id])
+  receptionistId String?
+  clinic       Clinic?  @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId, ts(sort: Desc)])
+  @@index([clinicId, action, ts(sort: Desc)])
+}
+
+// Email send + delivery log. Every outbound email (transactional, campaign,
+// notification) is recorded here so Platform Admin can show real analytics
+// (sent/delivered/opened/bounced/spam) and correlate webhook events by messageId.
+model EmailLog {
+  id            String    @id @default(cuid())
+  to            String
+  from          String
+  subject       String
+  category      String    @default("transactional") // transactional | campaign | notification
+  provider      String?   // brevo
+  messageId     String?   @unique
+  status        String    @default("queued") // queued | sent | delivered | opened | bounced | complained | failed
+  bounceType    String?   // hard | soft
+  openedAt      DateTime?
+  deliveredAt   DateTime?
+  bouncedAt     DateTime?
+  complainedAt  DateTime?
+  sentAt        DateTime?
+  error         String?
+  clinicId      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([category, createdAt(sort: Desc)])
+  @@index([clinicId, createdAt(sort: Desc)])
+  @@index([messageId])
+}
+
+model AnalyticsSnapshot {
+  id           String   @id @default(cuid())
+  clinicId     String?
+  date         DateTime
+  metrics      String   @default("{}") // JSON blob of metric->value
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  @@index([clinicId, date])
+}
+
+model FilteredMessageLog {
+  id           String   @id @default(cuid())
+  clinicId     String?
+  reason       String   // group | status | broadcast
+  raw          String
+  ts           DateTime @default(now())
+  deletedAt    DateTime?
+
+  @@index([clinicId, ts])
+}
+
+// Patient feedback collected after a completed appointment.
+// Used for clinic quality insights + doctor performance reviews.
+model AppointmentFeedback {
+  id           String   @id @default(cuid())
+  appointmentId String  @unique
+  clinicId     String
+  patientId    String
+  doctorId     String
+  rating       Int      // 1-5 stars
+  waitTimeMins Int?     // patient-reported actual wait time
+  tags         String   @default("[]") // JSON array: ["friendly","on_time","clean","rushed","confusing"]
+  comment      String?
+  channel      String   @default("whatsapp") // whatsapp | link | manual
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  appointment  Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  clinic       Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient      Patient     @relation(fields: [patientId], references: [id])
+  doctor       Doctor      @relation(fields: [doctorId], references: [id])
+
+  @@index([clinicId, doctorId, rating])
+  @@index([clinicId, createdAt])
+  @@index([patientId])
+}
+
+// ============================================================================
+// AUTOMATION RULES (condition-trigger-action DSL, §9)
+// ============================================================================
+
+model AutomationRule {
+  id             String   @id @default(cuid())
+  clinicId       String
+  name           String
+  enabled        Boolean  @default(true)
+
+  // Condition tree: JSON blob, e.g.:
+  // { "and": [ {"field": "appointment.status", "op": "eq", "value": "no_show"},
+  //            {"field": "patient.visitCount", "op": "lt", "value": 3} ] }
+  conditions     String   @default("{}")
+
+  // Action to execute when condition matches
+  actionType     String   // send_template | transfer_to_human | webhook
+  actionConfig   String   @default("{}") // JSON: { templateId, delayMinutes, webhookUrl, etc. }
+
+  // What event triggers evaluation
+  triggerEvent   String   // appointment.no_show | appointment.cancelled | appointment.booked | patient.dormant[90d] | appointment.reminder.failed
+
+  priority       Int      @default(0)
+  maxExecutions  Int      @default(1) // 0 = unlimited, prevents infinite loops
+  executionCount Int      @default(0)
+  lastExecutedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  clinic         Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, triggerEvent, enabled])
+}
+
+// ============================================================================
+// CAMPAIGNS / AUTOMATION ENGINE (v2 NEW)
+// ============================================================================
+
+model Campaign {
+  id           String   @id @default(cuid())
+  clinicId     String
+  name         String
+  type         String   // broadcast | reminder | followup | promotion
+  channel      String   @default("whatsapp") // whatsapp | sms | email
+  status       CampaignStatus @default(draft)
+  templateName String?  // Meta template name (for template messages)
+  templateBody String?  // The message body / template content
+  language     String   @default("urdu")
+  modality     String   @default("text") // text | voice | template
+  scheduleType String   @default("immediate") // immediate | scheduled | recurring
+  scheduledAt  DateTime?
+  recurring    String?  // cron expression for recurring campaigns
+  filter      String   @default("{}") // JSON: patient filter criteria
+  sentCount    Int      @default(0)
+  deliveredCount Int    @default(0)
+  failedCount  Int      @default(0)
+  openedCount  Int      @default(0)
+  repliedCount  Int      @default(0)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic      Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  messages    CampaignMessage[]
+
+  @@index([clinicId, status, scheduledAt])
+}
+
+model CampaignMessage {
+  id           String   @id @default(cuid())
+  campaignId   String
+  clinicId     String
+  patientId    String?
+  phone        String
+  messageBody  String
+  status       String   @default("pending") // pending | sent | delivered | read | failed
+  error        String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+  @@index([clinicId, status])
+}
+
+// ============================================================================
+// DEVICE TOKENS (push notifications)
+// ============================================================================
+
+model DeviceToken {
+  id           String   @id @default(cuid())
+  token        String   // Expo push token
+  userId       String   // references the user's sub/ID
+  userType     String   // clinic_admin | doctor | receptionist | platform_admin | platform_staff
+  clinicId     String?
+  platform     String   @default("unknown") // ios | android | web
+  deviceName   String?  // e.g. "iPhone 15 Pro", "Samsung Galaxy S24"
+  active       Boolean  @default(true)
+  lastUsedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([token, userId])
+  @@index([userId, active])
+  @@index([clinicId, active])
+  @@index([token])
+  @@index([userId, userType])
+}
+
+// ============================================================================
+// QUICK REPLY SNIPPETS
+// ============================================================================
+
+// Custom quick reply snippets that clinic staff can define and reuse
+// during manual conversation takeover.
+model QuickReplySnippet {
+  id        String   @id @default(cuid())
+  clinicId  String
+  label     String   // short chip label
+  body      String   // full message text
+  category  String   @default("general") // greeting | booking | payment | info | general
+  sortIdx   Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  clinic    Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, enabled, sortIdx])
+}
+
+// ============================================================================
+// PHARMACY MODULE (v3) — in-house dispensary / medical store / flexible hisab-kitab
+// Every model is clinic-scoped and soft-delete ready (deletedAt where noted).
+// ============================================================================
+
+// Generic per-clinic feature flags with per-feature config JSON.
+// Drives dashboard tab visibility and flexible billing. Pharmacy uses
+// key='pharmacy' with a config blob (see src/lib/pharmacy-billing.ts).
+model ClinicFeature {
+  id        String   @id @default(cuid())
+  clinicId  String
+  key       String   // 'pharmacy' | 'inventory' | 'appointments' | 'campaigns' | ...
+  enabled   Boolean  @default(false)
+  config    String   @default("{}") // JSON per-feature settings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  clinic    Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, key])
+  @@index([clinicId, enabled])
+}
+
+// Catalog of sellable / dispensable items (medicine or consumable)
+model PharmacyProduct {
+  id           String   @id @default(cuid())
+  clinicId     String
+  name         String          // "Paracetamol 500mg"
+  genericName  String?
+  brand        String?
+  form         String   @default("tablet") // tablet|syrup|capsule|injection|cream|equipment
+  strength     String?         // "500mg"
+  unit         String   @default("strip") // strip|box|vial|piece
+  purchasePrice Int     @default(0)   // avg cost (PKR)
+  salePrice     Int     @default(0)   // MRP / sale (PKR)
+  taxRate       Float   @default(0)   // GST % if applicable
+  reorderLevel  Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  stockBatches  PharmacyStockBatch[]
+  prescriptionItems PrescriptionItem[]
+  saleItems     PharmacySaleItem[]
+  purchaseItems PurchaseItem[]
+
+  @@index([clinicId, active])
+  @@index([clinicId, name])
+}
+
+// Lot/batch with expiry — Pakistani pharma lives & dies by expiry tracking
+model PharmacyStockBatch {
+  id           String   @id @default(cuid())
+  clinicId     String
+  productId    String
+  batchNo      String?
+  expiry       DateTime?
+  quantity     Int      @default(0)
+  costPrice    Int      @default(0)   // per-unit cost for THIS batch (FIFO)
+  supplierId   String?
+  receivedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  clinic       Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  product      PharmacyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier     Supplier?        @relation(fields: [supplierId], references: [id])
+  saleItems    PharmacySaleItem[]
+
+  @@index([clinicId, productId])
+  @@index([clinicId, expiry])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  contact   String?
+  city      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  clinic    Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  batches   PharmacyStockBatch[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([clinicId, name])
+}
+
+// Purchase / procurement from supplier
+model PurchaseOrder {
+  id         String   @id @default(cuid())
+  clinicId   String
+  supplierId String?
+  invoiceNo  String?
+  total      Int      @default(0)
+  status     String   @default("received") // draft|received
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  clinic     Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+  items      PurchaseItem[]
+
+  @@index([clinicId, status])
+}
+
+model PurchaseItem {
+  id             String   @id @default(cuid())
+  purchaseOrderId String
+  productId      String
+  batchNo        String?
+  expiry         DateTime?
+  quantity       Int
+  unitCost       Int
+  createdAt      DateTime @default(now())
+  deletedAt      DateTime?
+
+  purchaseOrder  PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product        PharmacyProduct @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+}
+
+// Prescription (links a consult to medicines)
+model Prescription {
+  id            String   @id @default(cuid())
+  clinicId      String
+  patientId     String
+  doctorId      String?
+  appointmentId String?   // null for walk-in dispensary
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  doctor        Doctor?  @relation(fields: [doctorId], references: [id])
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  items         PrescriptionItem[]
+  pharmacySales PharmacySale[]
+
+  @@index([clinicId, patientId])
+  @@index([clinicId, appointmentId])
+}
+
+model PrescriptionItem {
+  id             String   @id @default(cuid())
+  prescriptionId String
+  productId      String
+  quantity       Int
+  dosage         String?  // "1x2 for 5 days"
+  createdAt      DateTime @default(now())
+  deletedAt      DateTime?
+
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  product        PharmacyProduct @relation(fields: [productId], references: [id])
+
+  @@index([prescriptionId])
+}
+
+// Counter sale (the dispensing transaction)
+model PharmacySale {
+  id             String   @id @default(cuid())
+  clinicId       String
+  patientId      String?
+  prescriptionId String?
+  appointmentId  String?   // bundle with consult if clinic does both
+  subtotal       Int
+  discount       Int       @default(0)
+  tax            Int       @default(0)
+  total          Int
+  paymentMode    String    @default("cash")   // cash | online
+  paymentStatus  String    @default("pending")// pending | paid | refund_due
+  channel        String    @default("counter")// counter | whatsapp | link
+  createdByStaffId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient       Patient? @relation(fields: [patientId], references: [id])
+  prescription  Prescription? @relation(fields: [prescriptionId], references: [id])
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  items         PharmacySaleItem[]
+  paymentProof  PaymentProof?  @relation("PharmacySalePaymentProof")
+  paymentToken  PaymentToken?  @relation("PharmacySalePaymentToken")
+  creditLedger  CreditLedger?  @relation("PharmacySaleCreditLedger")
+
+  @@index([clinicId, patientId])
+  @@index([clinicId, paymentStatus])
+  @@index([clinicId, createdAt(sort: Desc)])
+}
+
+model PharmacySaleItem {
+  id        String   @id @default(cuid())
+  saleId    String
+  productId String
+  batchId   String?   // decrement specific lot (FIFO)
+  quantity  Int
+  unitPrice Int
+  lineTotal Int
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  sale      PharmacySale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   PharmacyProduct @relation(fields: [productId], references: [id])
+  batch     PharmacyStockBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}

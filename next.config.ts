@@ -6,12 +6,16 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  instrumentationHook: false,
   allowedDevOrigins: [
     'app.clinicai.pk',
     'clinicai.pk',
+    'localhost',
+    '*.localhost',
   ],
   serverExternalPackages: ['@sentry/nextjs'],
+  turbopack: {
+    root: __dirname,
+  },
 };
 
 export default nextConfig;

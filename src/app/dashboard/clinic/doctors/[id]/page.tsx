@@ -30,7 +30,7 @@ export default async function DoctorDetailPage({ params }: { params: Promise<{ i
 
   return (
     <DashboardShell userType="clinic_admin" userName={session.name} clinicName={clinic.name} navItems={clinicAdminNav}>
-      <DoctorDetailClient doctor={doctor} />
+      <DoctorDetailClient doctor={doctor as any} />
     </DashboardShell>
   )
 }

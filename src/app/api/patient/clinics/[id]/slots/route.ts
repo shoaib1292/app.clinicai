@@ -6,6 +6,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requirePatientAuth } from '@/lib/patient-session'
 import { ok, err, handle } from '@/lib/api'
+import { generateSlotsForDoctorDate } from '@/lib/schedule'
 
 async function list(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: clinicId } = await params
@@ -17,24 +18,26 @@ async function list(req: NextRequest, { params }: { params: Promise<{ id: string
 
   if (!doctorId) return err('doctorId is required', 400)
 
-  // Default to today if no date provided
-  const date = dateStr ? new Date(dateStr) : new Date()
-  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const startOfDay = dateStr
+    ? new Date(dateStr + 'T00:00:00.000Z')
+    : new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z')
+
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
+
+  // Auto-generate slots on demand so patients always see up-to-date availability
+  await generateSlotsForDoctorDate(doctorId, startOfDay)
 
   const slots = await db.slot.findMany({
     where: {
       doctorId,
       clinicId,
       status: 'open',
-      startTime: { gte: startOfDay, lt: endOfDay },
+      date: { gte: startOfDay, lt: endOfDay },
     },
     select: {
       id: true,
       startTime: true,
       tokenNo: true,
-      maxPatients: true,
-      queueMode: true,
     },
     orderBy: { startTime: 'asc' },
   })

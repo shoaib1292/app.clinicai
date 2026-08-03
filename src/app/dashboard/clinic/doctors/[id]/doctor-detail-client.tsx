@@ -8,23 +8,41 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { ArrowLeft, Stethoscope, CalendarDays, Clock, Activity, Plus, User, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Stethoscope, CalendarDays, Clock, Activity, Plus, User, AlertCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Schedule { id: string; dayOfWeek: number; startTime: string; endTime: string; breakWindows: string; isEmergency: boolean }
-interface Service { id: string; name: string; durationMin: number; baseFee: number; extraClinicFee: number }
+interface Service { id: string; name: string; durationMin: number; baseFee: number; extraClinicFee?: number | null }
 interface ScheduleOverride { id: string; date: Date; type: string; startTime: string | null; endTime: string | null; reason: string | null }
 interface Doctor {
   id: string; name: string; gender: string; speciality: string; slotDurationMin: number
   queueMode: string; currentStatus: string; statusEta: number | null; workingHours: string
   phone: string | null; email: string | null; active: boolean
+  canTelemedicine: boolean; telemedicineFee: number
+  qualifications?: string | null; bio?: string | null; languages?: string | null; imageKey?: string | null; displayOnWebsite?: boolean
   schedules: Schedule[]; scheduleOverrides: ScheduleOverride[]; services: Service[]
   _count: { appointments: number }
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+const DAY_LABELS_SHORT: Record<string, string> = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' }
+
+type DaySchedule = { start: string; end: string; breaks: { start: string; end: string }[] }
+
+function parseWorkingHours(raw: string): Record<string, DaySchedule> {
+  try {
+    const parsed = JSON.parse(raw || '{}')
+    for (const day of DAY_KEYS) {
+      if (!parsed[day]) continue
+    }
+    return parsed
+  } catch {
+    return {}
+  }
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   in_clinic: { label: 'In Clinic', color: 'bg-chart-2' },
   break: { label: 'On Break', color: 'bg-chart-4' },
@@ -35,7 +53,17 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
   const [doctor, setDoctor] = useState(initial)
   const [editOpen, setEditOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [overrideOpen, setOverrideOpen] = useState(false)
+  const [editWhExpanded, setEditWhExpanded] = useState(false)
+  const [editWh, setEditWh] = useState<Record<string, DaySchedule>>(() => {
+    const parsed = parseWorkingHours(initial.workingHours)
+    const filled: Record<string, DaySchedule> = {}
+    for (const day of DAY_KEYS) {
+      if (parsed[day]) filled[day] = parsed[day]
+    }
+    return filled
+  })
   const [form, setForm] = useState({
     name: initial.name,
     gender: initial.gender,
@@ -45,6 +73,48 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
   })
   const [override, setOverride] = useState({ date: '', type: 'leave', startTime: '', endTime: '', reason: '' })
   const [saving, setSaving] = useState(false)
+
+  function toggleEditDay(day: string) {
+    setEditWh((prev) => {
+      const next = { ...prev }
+      if (next[day]) {
+        delete next[day]
+      } else {
+        next[day] = { start: '09:00', end: '17:00', breaks: [] }
+      }
+      return next
+    })
+  }
+
+  function updateEditDayTime(day: string, field: 'start' | 'end', value: string) {
+    setEditWh((prev) => {
+      if (!prev[day]) return prev
+      return { ...prev, [day]: { ...prev[day], [field]: value } }
+    })
+  }
+
+  function addEditDayBreak(day: string) {
+    setEditWh((prev) => {
+      if (!prev[day]) return prev
+      return { ...prev, [day]: { ...prev[day], breaks: [...prev[day].breaks, { start: '13:00', end: '14:00' }] } }
+    })
+  }
+
+  function removeEditDayBreak(day: string, idx: number) {
+    setEditWh((prev) => {
+      if (!prev[day]) return prev
+      return { ...prev, [day]: { ...prev[day], breaks: prev[day].breaks.filter((_, i) => i !== idx) } }
+    })
+  }
+
+  function updateEditDayBreak(day: string, idx: number, field: 'start' | 'end', value: string) {
+    setEditWh((prev) => {
+      if (!prev[day]) return prev
+      const breaks = [...prev[day].breaks]
+      breaks[idx] = { ...breaks[idx], [field]: value }
+      return { ...prev, [day]: { ...prev[day], breaks } }
+    })
+  }
 
   async function saveEdit() {
     setSaving(true)
@@ -65,6 +135,28 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
       setDoctor({ ...doctor, ...json.data })
       setEditOpen(false)
       toast.success('Doctor updated')
+    } else toast.error(json.error || 'Failed')
+  }
+
+  async function saveSchedule() {
+    setSaving(true)
+    const workingHoursPayload: Record<string, DaySchedule> = {}
+    for (const day of DAY_KEYS) {
+      if (editWh[day]) {
+        workingHoursPayload[day] = editWh[day]
+      }
+    }
+    const res = await fetch(`/api/doctors/${doctor.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workingHours: workingHoursPayload }),
+    })
+    setSaving(false)
+    const json = await res.json()
+    if (json.ok) {
+      setDoctor({ ...doctor, workingHours: JSON.stringify(workingHoursPayload), ...json.data })
+      setScheduleOpen(false)
+      toast.success('Schedule updated')
     } else toast.error(json.error || 'Failed')
   }
 
@@ -143,6 +235,7 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)}><CalendarDays className="w-3 h-3 mr-1" />Schedule</Button>
               <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit</Button>
             </div>
           </div>
@@ -223,7 +316,7 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
                     <div className="text-xs text-muted-foreground">{s.durationMin}min</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-semibold">PKR {s.baseFee + s.extraClinicFee + 50}</div>
+                    <div className="text-sm font-semibold">PKR {s.baseFee + (s.extraClinicFee ?? 0) + 50}</div>
                     <div className="text-xs text-muted-foreground">+50 platform</div>
                   </div>
                 </div>
@@ -305,12 +398,12 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Doctor</DialogTitle>
             <DialogDescription>Update doctor profile and queue settings.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label>Name</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -362,6 +455,101 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={saveEdit} disabled={saving}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Dialog */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="max-w-md sm:max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Weekly Schedule</DialogTitle>
+            <DialogDescription>Set working hours and breaks for each day.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Days</span>
+              <span className="text-xs text-muted-foreground">{DAY_KEYS.filter((d) => editWh[d]).length} of 7 active</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {DAY_KEYS.map((day) => {
+                const active = !!editWh[day]
+                return (
+                  <Button
+                    key={day}
+                    size="sm"
+                    variant={active ? 'default' : 'outline'}
+                    className="h-8 px-2.5 text-xs"
+                    onClick={() => toggleEditDay(day)}
+                  >
+                    {DAY_LABELS_SHORT[day]}
+                  </Button>
+                )
+              })}
+            </div>
+
+            {DAY_KEYS.filter((d) => editWh[d]).length > 0 && (
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7 px-2"
+                  onClick={() => setEditWhExpanded(!editWhExpanded)}
+                >
+                  {editWhExpanded ? 'Collapse hours & breaks' : 'Edit hours & breaks'}
+                </Button>
+                {editWhExpanded && (
+                  <div className="space-y-2 border rounded-lg p-3">
+                    {DAY_KEYS.filter((d) => editWh[d]).map((day) => {
+                      const s = editWh[day]
+                      if (!s) return null
+                      return (
+                        <div key={day} className="border rounded-md p-2 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold">{DAY_LABELS_SHORT[day]}</span>
+                            <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => toggleEditDay(day)}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Start</Label>
+                              <Input type="time" className="h-7 text-xs" value={s.start} onChange={(e) => updateEditDayTime(day, 'start', e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">End</Label>
+                              <Input type="time" className="h-7 text-xs" value={s.end} onChange={(e) => updateEditDayTime(day, 'end', e.target.value)} />
+                            </div>
+                          </div>
+                          {s.breaks.length > 0 && (
+                            <div className="space-y-1 pt-1">
+                              <Label className="text-[10px] text-muted-foreground">Breaks</Label>
+                              {s.breaks.map((b, i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                  <Input type="time" className="h-7 text-xs flex-1" value={b.start} onChange={(e) => updateEditDayBreak(day, i, 'start', e.target.value)} />
+                                  <span className="text-xs text-muted-foreground">to</span>
+                                  <Input type="time" className="h-7 text-xs flex-1" value={b.end} onChange={(e) => updateEditDayBreak(day, i, 'end', e.target.value)} />
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => removeEditDayBreak(day, i)}>
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => addEditDayBreak(day)}>
+                            + Add break
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+            <Button onClick={saveSchedule} disabled={saving}>Save Schedule</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

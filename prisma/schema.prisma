@@ -25,6 +25,7 @@ enum AppointmentStatus {
   no_show
   late_no_show
   invalid
+  in_call
 }
 
 enum Gender {
@@ -175,7 +176,23 @@ model Clinic {
   phone         String? // calling / landline number (no forced country code)
   whatsappNumber String? // clinic WhatsApp business number (defaults to +92)
   address       String?
-  logoUrl       String?
+  logoUrl       String?  // @deprecated — use logoKey + getImageUrl()
+
+  // ── NEW: R2 Image Keys (replaces logoUrl, heroImageUrl) ──
+  logoKey       String?  // R2 key for clinic logo, e.g. "cln_abc123/identity/logo"
+  heroImageKey  String?  // R2 key for website hero image
+
+  // ── NEW: Location coordinates (Google Maps) ──
+  latitude      Float?
+  longitude     Float?
+  googleMapsUrl String?
+
+  // ── NEW: Clinic stats for website counters ──
+  clinicStats   String?  // JSON: { yearsOfExperience, totalPatients, totalDoctors, totalBranches }
+
+  // ── NEW: Website Block Configuration ──
+  // JSON: [{ blockId: "hero-gradient", order: 0, visible: true, content: {...}, visual: {...} }]
+  blocksConfig  String?
 
   // Clinic-wide default working hours (JSON: {mon:{start,end,breaks:[{start,end}]},...})
   // Per-doctor workingHours override this per day. Mirrors Doctor.workingHours contract.
@@ -272,6 +289,31 @@ model Clinic {
   brandingPrimaryColor   String?
   brandingSecondaryColor String?
   patientPortalEnabled   Boolean  @default(false)
+  dailyRooms             DailyRoom[]
+
+  // ── Clinic Website (multi-tenant) ──
+  websiteEnabled        Boolean  @default(false)
+  themeId               String?  // @deprecated — removed, brandColor + blocksConfig drives everything
+  templateId            String?  // @deprecated — removed, block ordering replaces templates
+  brandColor            String?  // hex — drives --website-primary
+  customDomain          String?  @unique
+  customDomainVerified  Boolean  @default(false)
+  tagline               String?
+  description           String?  // Long about/hero text
+  socialLinks           String?  // JSON: { facebook, instagram, twitter, linkedin }
+  heroImageUrl          String?  // @deprecated — use heroImageKey + getImageUrl()
+  aiGeneratedContent    String?  // @deprecated — per-block content in blocksConfig
+  sectionVisibility     String?  // @deprecated — per-block visible flag in blocksConfig
+  headingFont           String?  // "Inter" | "Poppins" | "Playfair Display" | "Geist" | "DM Sans" | "Space Grotesk"
+  bodyFont              String?  // "Inter" | "Poppins" | "Geist" | "DM Sans" | "Space Grotesk"
+  galleryImagesJson     String?  // @deprecated — gallery blocks pull from blocksConfig content
+
+  // ── NEW: Holiday Calendar ──
+  holidayCalendarJson   String?  // JSON: [{ label, date, recurring }, ...]
+
+  websiteAnalytics      WebsiteAnalyticsEvent[]
+  holidayCalendars      HolidayCalendar[]
+  telemedicineSessions  TelemedicineSession[]
 }
 
 model ClinicAdmin {
@@ -334,6 +376,17 @@ model Doctor {
   workingHours   String   @default("{}") // JSON: {mon:{start,end,breaks:[]},...}
   phone          String?
   active         Boolean  @default(true)
+
+  // ── NEW: Website branding fields ──
+  imageKey          String?   // R2 key for doctor photo (transparent PNG preferred)
+  bio               String?   // Longer bio/description for website doctor cards
+  languages         String?   // Comma-separated: "urdu,english,sindhi"
+  displayOnWebsite  Boolean   @default(true)  // Show on public website?
+
+  // ── Telemedicine ──
+  canTelemedicine   Boolean   @default(false)
+  telemedicineFee   Int       @default(0)     // PKR, additional fee for video consults
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   deletedAt       DateTime?
@@ -350,6 +403,7 @@ model Doctor {
   email          String?  // optional login
   coveredBy      DoctorCover[] @relation("CoveredDoctor")
   coveringFor    DoctorCover[] @relation("CoveringDoctor")
+  telemedicineSessions TelemedicineSession[]
 
   @@index([clinicId, active])
 }
@@ -505,6 +559,7 @@ model Patient {
   prescriptions Prescription[]
   memories      PatientMemory[] @relation("PatientMemories")
   appUser      PatientAppUser? @relation(fields: [appUserId], references: [id])
+  telemedicineSessions TelemedicineSession[]
 
   @@unique([clinicId, phoneHash])
   @@index([clinicId, phoneLast4])
@@ -647,6 +702,7 @@ model Appointment {
   notes        String?
   type         String   @default("consultation") // consultation | operation | followup
   isTelemedicine Boolean @default(false)
+  modality     String   @default("in_clinic") // in_clinic | video
   operationNotes String? // pre-op notes, equipment, instructions for surgery
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -665,6 +721,7 @@ model Appointment {
   dailyRooms   DailyRoom[]
   pharmacySales PharmacySale[]
   prescriptions Prescription[]
+  telemedicineSessions TelemedicineSession[]
 
   @@index([clinicId, status, start])
   @@index([clinicId, patientId])
@@ -809,23 +866,61 @@ model DailyApiKey {
   @@index([enabled, priority])
 }
 
+// ============================================================================
+// LIVEKIT ROOMS — Telemedicine video room tracking
+// (Formerly Daily.co rooms; repurposed for self-hosted LiveKit)
+// ============================================================================
+
 model DailyRoom {
   id              String    @id @default(cuid())
-  roomName        String    @unique              // Daily.co room name
-  roomUrl         String                          // Full Daily.co URL
-  dailyKeyId      String
+  roomName        String    @unique              // LiveKit room name
+  roomUrl         String                          // Join URL for the room
+  dailyKeyId      String?                         // Nullable — no longer requires an API key
+  clinicId        String?                         // Clinic scoping for billing
   appointmentId   String?                         // Link to Appointment if from telemedicine
   status          String    @default("created")   // created | active | ended
+  metadata        String?                         // JSON: { appointmentId, clinicId, doctorId }
   startedAt       DateTime?
   endedAt         DateTime?
   durationMinutes Int       @default(0)
   createdAt       DateTime  @default(now())
 
-  dailyKey        DailyApiKey  @relation(fields: [dailyKeyId], references: [id])
+  dailyKey        DailyApiKey?  @relation(fields: [dailyKeyId], references: [id])
   appointment     Appointment? @relation(fields: [appointmentId], references: [id])
+  clinic          Clinic?      @relation(fields: [clinicId], references: [id])
 
   @@index([dailyKeyId])
   @@index([appointmentId])
+  @@index([clinicId, status])
+}
+
+// ============================================================================
+// TELEMEDICINE — Call sessions & billing
+// ============================================================================
+
+model TelemedicineSession {
+  id              String   @id @default(cuid())
+  roomName        String   @unique
+  appointmentId   String?
+  clinicId        String
+  doctorId        String?
+  patientId       String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationMinutes Int      @default(0)
+  ratePerMinute   Int      @default(1)
+  amountCharged   Int      @default(0)
+  billingStatus   String   @default("pending") // pending | charged
+  createdAt       DateTime @default(now())
+
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
+  clinic          Clinic   @relation(fields: [clinicId], references: [id])
+  doctor          Doctor?  @relation(fields: [doctorId], references: [id])
+  patient         Patient? @relation(fields: [patientId], references: [id])
+
+  @@index([clinicId, createdAt(sort: Desc)])
+  @@index([appointmentId])
+  @@index([billingStatus])
 }
 
 // ============================================================================
@@ -1587,4 +1682,45 @@ model PharmacySaleItem {
 
   @@index([saleId])
   @@index([productId])
+}
+
+// ============================================================================
+// HOLIDAY CALENDAR — per-clinic holidays & closures
+// ============================================================================
+
+model HolidayCalendar {
+  id          String    @id @default(cuid())
+  clinicId    String
+  clinic      Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  label       String    // e.g., "Eid-ul-Fitr"
+  date        DateTime  // Specific date
+  isRecurring Boolean   @default(false)  // True for annual holidays like Independence Day
+  isClosed    Boolean   @default(true)   // Clinic fully closed? false = partial hours
+  startTime   String?   // If partial day (isClosed=false): e.g., "10:00"
+  endTime     String?   // If partial day
+  createdAt   DateTime  @default(now())
+
+  @@index([clinicId, date])
+}
+
+// ============================================================================
+// WEBSITE ANALYTICS (per-clinic visitor tracking)
+// ============================================================================
+
+model WebsiteAnalyticsEvent {
+  id         String   @id @default(cuid())
+  clinicId   String
+  eventType  String   // "pageview" | "booking_click" | "wa_click" | "phone_click" | "portal_login"
+  path       String   // e.g., "/", "/about", "/portal/login"
+  referrer   String?  // e.g., "google.com", "direct"
+  userAgent  String?  // truncated — for bot filtering
+  ipHash     String?  // sha256(ip) — unique visitor estimation
+  sessionId  String?  // anonymous session cookie — groups events
+  timestamp  DateTime @default(now())
+
+  clinic     Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, eventType])
+  @@index([clinicId, timestamp])
+  @@index([timestamp])
 }

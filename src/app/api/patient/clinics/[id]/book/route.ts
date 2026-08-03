@@ -1,7 +1,6 @@
 /**
  * POST /api/patient/clinics/[id]/book
  * Patient books an appointment via the app.
- * Mirrors the public/book route but with patient auth + auto-patient-attach.
  */
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
@@ -23,6 +22,7 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
     serviceId?: string
     paymentMode?: string
     paymentProof?: string
+    modality?: string
   }
 
   const { doctorId, slotId, serviceId } = body
@@ -46,7 +46,7 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
     const appUser = await db.patientAppUser.findUnique({ where: { id: appUserId } })
     if (!appUser) return err('Patient not found', 404)
 
-    const phoneHash = hashPhone(appUser.phone + clinicId)
+    const phoneHash = hashPhone(appUser.phone)
     let patient = await db.patient.findFirst({
       where: { appUserId, clinicId },
     })
@@ -75,8 +75,16 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
       }
     }
 
+    // ── Construct proper Date from slot.date + slot.startTime ──
+    const [h, m] = slot.startTime.split(':').map(Number)
+    const start = new Date(slot.date)
+    start.setHours(h || 0, m || 0, 0, 0)
+
+    const durationMin = doctor.slotDurationMin || 15
+    const end = new Date(start.getTime() + durationMin * 60 * 1000)
+
     // ── Compute fees ──
-    const fees = computeFees(doctor, slot)
+    const fees = computeFees({ doctorFee: 0, extraClinicFee: 0 })
 
     // ── Create appointment ──
     const appt = await db.appointment.create({
@@ -85,20 +93,23 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
         patientId: patient.id,
         doctorId,
         slotId,
-        start: slot.startTime,
+        start,
+        end,
         status: 'booked',
         serviceId: serviceId || null,
         paymentMode: body.paymentMode || 'screenshot',
         totalFee: fees.total,
         doctorFee: fees.doctorFee,
         platformFee: fees.platformFee,
+        isTelemedicine: body.modality === 'video',
+        modality: body.modality || 'in_clinic',
       },
     })
 
     // ── Mark slot as booked ──
     await db.slot.update({
       where: { id: slotId },
-      data: { status: 'booked', patientId: patient.id, appointmentId: appt.id },
+      data: { status: 'booked' },
     })
 
     // ── Create single 30-min reminder ──
@@ -106,7 +117,7 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
       data: {
         appointmentId: appt.id,
         type: 'reminder_30min',
-        sendAt: new Date(slot.startTime.getTime() - 30 * 60 * 1000),
+        sendAt: new Date(start.getTime() - 30 * 60 * 1000),
         status: 'pending',
         channel: 'whatsapp',
       },
@@ -118,14 +129,13 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
     await db.clinic.update({ where: { id: clinicId }, data: { creditBalance: Math.max(0, newBalance) } })
 
     // ── Publish event ──
-    publishAppointmentBooked(clinicId, {
-      id: appt.id,
-      status: 'booked',
-      patientId: patient.id,
-      patientName: patient.name || 'Patient',
-      doctorId,
-      start: slot.startTime,
-    })
+    publishAppointmentBooked(
+      clinicId,
+      { id: appt.id, status: 'booked' },
+      { id: patient.id, name: patient.name || 'Patient', phone: patient.phone },
+      { id: doctorId, name: doctor.name },
+      clinicRecord?.creditBalance ? `${clinicRecord.creditBalance}` : 'Clinic',
+    )
 
     await store.publish(`clinic:${clinicId}:queue`, {
       type: 'slot_booked',
@@ -137,7 +147,7 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
 
     return ok({
       appointmentId: appt.id,
-      start: slot.startTime,
+      start,
       doctor: doctor.name,
       tokenNo: slot.tokenNo,
     })

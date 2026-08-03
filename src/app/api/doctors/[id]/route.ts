@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireClinicScope, auditLog } from '@/lib/session'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
+import { ensureSlots } from '@/lib/schedule'
 
 // Set doctor's current_status (in_clinic | break | off | on_way)
 async function setStatus(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -46,11 +47,48 @@ async function patch(req: NextRequest, { params }: { params: Promise<{ id: strin
   const body = await req.json()
   const doctor = await db.doctor.findFirst({ where: { id, clinicId } })
   if (!doctor) return err('Not found', 404)
+
+  const workingHoursChanged = !!body.workingHours
+  const workingHoursJson = workingHoursChanged ? JSON.stringify(body.workingHours) : undefined
+
   const updated = await db.doctor.update({ where: { id }, data: {
     name: body.name, gender: body.gender, speciality: body.speciality,
     slotDurationMin: body.slotDurationMin, queueMode: body.queueMode,
-    workingHours: body.workingHours ? JSON.stringify(body.workingHours) : undefined,
+    workingHours: workingHoursJson,
+    canTelemedicine: body.canTelemedicine,
+    telemedicineFee: body.telemedicineFee,
   } })
+
+  // Sync Schedule records and regenerate slots when workingHours change
+  if (workingHoursChanged) {
+    const wh = JSON.parse(workingHoursJson!)
+    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+    // Delete old schedules and recreate
+    await db.schedule.deleteMany({ where: { doctorId: id } })
+    for (let dow = 0; dow < 7; dow++) {
+      const dayKey = days[dow]
+      const day = wh[dayKey]
+      if (day) {
+        await db.schedule.create({
+          data: {
+            doctorId: id,
+            dayOfWeek: dow,
+            startTime: day.start,
+            endTime: day.end,
+            breakWindows: JSON.stringify(day.breaks || []),
+          },
+        })
+      }
+    }
+
+    // Delete future slots and regenerate (schedule changed = old slots invalid)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    await db.slot.deleteMany({ where: { doctorId: id, date: { gte: today }, status: 'open' } })
+    await ensureSlots(id, 30)
+  }
+
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'doctor_updated', target: id, metadata: body })
   return ok(updated)
 }

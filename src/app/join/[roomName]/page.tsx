@@ -25,5 +25,5 @@ export default async function JoinCallPage({ params }: { params: Promise<{ roomN
     )
   }
 
-  return <JoinCallClient roomUrl={room.roomUrl} roomName={room.roomName} />
+  return <JoinCallClient roomName={room.roomName} />
 }

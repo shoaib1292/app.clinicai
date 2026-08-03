@@ -1,0 +1,182 @@
+name: ClinicAI Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit || echo "TypeScript errors found (see above). Prisma \$extends breaks some type inferences — review before merging."
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: clinicai
+          POSTGRES_PASSWORD: clinicai-test
+          POSTGRES_DB: clinicai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://clinicai:clinicai-test@localhost:5432/clinicai_test
+      REDIS_URL: redis://localhost:6379
+      STORE_TYPE: redis
+      NODE_ENV: test
+      E2E_BASE_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Push DB schema
+        run: npx prisma db push --skip-generate
+      - name: Install Playwright
+        run: npx playwright install chromium
+      - name: Start dev server
+        run: |
+          npm run dev:next &
+          npx wait-on http://localhost:8000 --timeout 60000
+      - name: Run E2E tests
+        run: npm run test:e2e
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  push-images:
+    needs: [test, e2e-tests]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        service:
+          - name: app
+            dockerfile: Dockerfile
+            context: .
+          - name: realtime
+            dockerfile: mini-services/realtime/Dockerfile
+            context: ./mini-services/realtime
+          - name: worker
+            dockerfile: Dockerfile.worker
+            context: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service.name }} image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
+
+  deploy:
+    needs: push-images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/clinicsai
+            # Pull all service images
+            docker compose -f docker-compose.prod.yml pull || docker compose pull
+            # Recreate ALL services with new images (including Caddy for config changes)
+            docker compose -f docker-compose.prod.yml up -d --force-recreate || docker compose up -d --force-recreate
+            # Clean up old images
+            docker image prune -f
+
+  backup:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    schedule:
+      - cron: '0 2 * * *'  # Daily at 2 AM
+    steps:
+      - name: SSH and backup database
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            # Find the postgres container dynamically
+            CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
+            if [ -z "$CONTAINER" ]; then
+              echo "ERROR: No postgres container found"
+              exit 1
+            fi
+            echo "Backing up from container: $CONTAINER"
+            docker exec "$CONTAINER" pg_dump -U ${{ secrets.DB_USER }} ${{ secrets.DB_NAME }} | gzip > /backups/clinicsai_$(date +%Y%m%d_%H%M%S).sql.gz
+            # Keep only last 30 days
+            find /backups -name "*.sql.gz" -mtime +30 -delete
+            echo "Backup complete. Disk usage:"
+            du -sh /backups

@@ -13,7 +13,7 @@ async function list(req: NextRequest, { params }: { params: Promise<{ id: string
 
   const doctors = await db.doctor.findMany({
     where: { clinicId, active: true },
-    select: { id: true, name: true, speciality: true, gender: true, fee: true },
+    select: { id: true, name: true, speciality: true, gender: true, currentStatus: true, slotDurationMin: true, canTelemedicine: true },
     orderBy: { name: 'asc' },
   })
 

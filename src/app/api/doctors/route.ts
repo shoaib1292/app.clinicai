@@ -11,6 +11,7 @@ async function list(_req: NextRequest) {
     orderBy: { name: 'asc' },
     include: {
       schedules: true,
+      services: { select: { id: true, name: true } },
       _count: { select: { appointments: true, slots: true } },
     },
   })
@@ -20,7 +21,7 @@ async function list(_req: NextRequest) {
 async function create(req: NextRequest) {
   const { session, clinicId } = await requireClinicScope()
   const body = await req.json()
-  const { name, gender, speciality, slotDurationMin, queueMode, email, password, workingHours } = body
+  const { name, gender, speciality, slotDurationMin, queueMode, email, password, workingHours, canTelemedicine, telemedicineFee } = body
   if (!name || !speciality) return err('Name and speciality required', 400)
 
   const passwordHash = email && password ? await hashPassword(password) : null
@@ -44,6 +45,8 @@ async function create(req: NextRequest) {
       clinicId,
       email: email || null,
       passwordHash,
+      canTelemedicine: canTelemedicine ?? false,
+      telemedicineFee: telemedicineFee ?? 0,
     },
   })
 

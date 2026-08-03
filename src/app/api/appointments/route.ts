@@ -17,6 +17,7 @@ interface BookBody {
   channel?: string
   paymentMode?: string
   createdVia?: string
+  modality?: string
 }
 
 async function list(req: NextRequest) {
@@ -60,6 +61,11 @@ async function book(req: NextRequest) {
   // Validate doctor + slot belong to this clinic
   const doctor = await db.doctor.findFirst({ where: { id: doctorId, clinicId } })
   if (!doctor) return err('Doctor not found', 404)
+
+  // Telemedicine validation
+  if (body.modality === 'video' && !doctor.canTelemedicine) {
+    return err('This doctor does not offer video consultations', 400)
+  }
 
   const slot = await db.slot.findFirst({ where: { id: slotId, doctorId, clinicId } })
   if (!slot) return err('Slot not found', 404)
@@ -143,6 +149,8 @@ async function book(req: NextRequest) {
         paymentMode: paymentMode || 'cash',
         createdByStaffId: session.sub,
         createdVia: createdVia || (channel === 'whatsapp' ? 'agent' : 'receptionist'),
+        isTelemedicine: body.modality === 'video',
+        modality: body.modality || 'in_clinic',
       },
     })
 

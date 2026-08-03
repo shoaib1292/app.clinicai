@@ -1,6 +1,6 @@
 'use client'
 
-import { Stethoscope } from 'lucide-react'
+import { Stethoscope, Video } from 'lucide-react'
 
 interface Doctor {
   id: string
@@ -9,6 +9,7 @@ interface Doctor {
   gender: string
   currentStatus: string
   slotDurationMin: number
+  canTelemedicine?: boolean
 }
 
 export function DoctorSelector({
@@ -61,6 +62,11 @@ export function DoctorSelector({
                 >
                   {d.currentStatus === 'in_clinic' ? '● Available' : '○ Away'}
                 </span>
+                {d.canTelemedicine && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center gap-0.5">
+                    <Video className="w-2.5 h-2.5" /> Video
+                  </span>
+                )}
               </div>
             </div>
             <svg className="w-5 h-5 text-muted-foreground shrink-0" viewBox="0 0 20 20" fill="currentColor">

@@ -1,32 +1,24 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { VideoCall } from '@/components/video-call'
+import { LiveKitCall } from '@/components/livekit-call'
 import { Video, ArrowRight } from 'lucide-react'
 
-export function JoinCallClient({ roomUrl, roomName }: { roomUrl: string; roomName: string }) {
+export function JoinCallClient({ roomName }: { roomName: string }) {
   const [name, setName] = useState('')
   const [joined, setJoined] = useState(false)
-  const activatedRef = useRef(false)
-
-  useEffect(() => {
-    if (joined && !activatedRef.current) {
-      activatedRef.current = true
-      fetch('/api/dailyco/rooms', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomName }),
-      }).catch(() => {})
-    }
-  }, [joined, roomName])
 
   if (joined) {
     return (
       <div className="min-h-screen bg-black flex flex-col">
         <div className="flex-1 flex items-center justify-center p-4">
-          <VideoCall roomUrl={roomUrl} roomName={roomName} participantName={name} />
+          <LiveKitCall
+            roomName={roomName}
+            identity={name.trim() || `guest-${Date.now()}`}
+            displayName={name.trim() || 'Guest'}
+          />
         </div>
       </div>
     )
@@ -36,8 +28,8 @@ export function JoinCallClient({ roomUrl, roomName }: { roomUrl: string; roomNam
     <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/20">
-            <Video className="w-7 h-7 text-emerald-400" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-zinc-800">
+            <Video className="w-7 h-7 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">Join Video Call</h1>
@@ -56,7 +48,7 @@ export function JoinCallClient({ roomUrl, roomName }: { roomUrl: string; roomNam
           <Button
             onClick={() => setJoined(true)}
             disabled={!name.trim()}
-            className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
+            className="w-full h-11 bg-white hover:bg-zinc-200 text-black rounded-lg"
           >
             Join Call
             <ArrowRight className="w-4 h-4 ml-1" />

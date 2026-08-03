@@ -57,3 +57,101 @@ server.log
 
 # LLM config dumped at runtime (contains decrypted API keys)
 .llm-config
+
+# Temp/debug artifacts
+*.bak
+*.tgz
+bun.lock
+metro-bundle.js
+
+# Dev scripts (one-off)
+_chk.ps1
+_exec2.ps1
+_logprobe.ps1
+_poll2.ps1
+_poll_long.ps1
+_vol.ps1
+add_domain.ps1
+check_pg.ps1
+check_redis.ps1
+connect_net.ps1
+deploy.ps1
+explore_api.ps1
+get_cookies.ps1
+login.ps1
+patch_net.ps1
+route_scan.ps1
+coolify_probe.ps1
+
+# Temp output files
+dbg.txt
+dbgval.txt
+dbgval2.txt
+dbgval3.txt
+block.md
+cc.txt
+cheaders.txt
+cjar.txt
+cnt.txt
+cookies.txt
+coolify_cookies.txt
+coolify_env.txt
+coolify_response.txt
+coolify_session.xml
+dashboarddesign.md.txt
+migrate_wh.txt
+npm_clean.txt
+resp.html
+resp2.html
+resp3.txt
+routes.txt
+schema_history.txt
+session_token.txt
+skills-lock.json
+stalwart_page.txt
+tw_install.txt
+tw_v.txt
+val_run.txt
+val_run2.txt
+guard_run.txt
+iso2.txt
+iso3.txt
+iso4.txt
+iso_log.txt
+lk.txt
+build_out.txt
+app_raw.json
+deploy_raw.json
+test_result.json
+openapi.json
+
+# Debug images
+error1.jpeg
+error2.jpeg
+
+# Local data dirs
+data/
+db/
+.pgsql/
+.redis/
+appendonlydir/
+.zcode/
+.zscripts/
+~/
+
+# Agent/tool scratch
+agent-ctx/
+tool-results/
+website-builder-plan/
+
+# One-off tests
+debug_val.test.ts
+test-cloudinary.ts
+playwright.config.ts
+
+# Shell artifacts
+$((Get-Item
+$null
+%PGLIB%/
+1
+4

@@ -20,7 +20,7 @@ export default async function DoctorDashboardPage() {
   const clinicId = session.clinicId
 
   const [doctor, clinic] = await Promise.all([
-    db.doctor.findUnique({ where: { id: doctorId }, include: { services: true } }),
+    db.doctor.findUnique({ where: { id: doctorId }, include: { services: true, schedules: { orderBy: { dayOfWeek: 'asc' } } } }),
     db.clinic.findUnique({ where: { id: clinicId }, select: { name: true } }),
   ])
   if (!doctor || !clinic) redirect('/login')
@@ -37,6 +37,7 @@ export default async function DoctorDashboardPage() {
       patient: true,
       service: true,
       slot: true,
+      dailyRooms: { select: { roomName: true, status: true } },
     },
   })
 

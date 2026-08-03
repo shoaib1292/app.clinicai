@@ -7,13 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { CalendarDays, CheckCircle2, XCircle, Clock, Users, Activity, Stethoscope, LogIn, LogOut, Coffee, Car, Hash, Wifi } from 'lucide-react'
+import { CalendarDays, CheckCircle2, XCircle, Clock, Users, Activity, Stethoscope, LogIn, LogOut, Coffee, Car, Hash, Wifi, Video } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { AnimatedCounter } from '@/components/animated-counter'
 import { MetricCard } from '@/components/analytics/stat-card'
 import { useRealtime } from '@/hooks/use-realtime'
+import { LiveKitCallDialog } from '@/components/livekit-call'
 import type { SessionPayload } from '@/lib/auth'
+
+interface Schedule { id: string; dayOfWeek: number; startTime: string; endTime: string; breakWindows: string; isEmergency: boolean }
 
 interface DoctorData {
   id: string
@@ -23,7 +26,9 @@ interface DoctorData {
   queueMode: string
   gender: string
   slotDurationMin: number
+  workingHours: string
   services: Array<{ id: string; name: string }>
+  schedules: Schedule[]
 }
 
 interface TodayAppt {
@@ -35,9 +40,12 @@ interface TodayAppt {
   paymentMode: string
   totalFee: number
   checkInTime: Date | null
+  isTelemedicine: boolean
+  modality: string
   patient: { id: string; name: string | null; phone: string; gender: string }
   service: { id: string; name: string } | null
   slot: { tokenNo: number | null } | null
+  dailyRooms: Array<{ roomName: string; status: string }>
 }
 
 interface Props {
@@ -60,6 +68,7 @@ export function DoctorDashboard({ session, clinicName, doctor, todayAppts, stats
   const router = useRouter()
   const [status, setStatus] = useState(doctor.currentStatus)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [videoCall, setVideoCall] = useState<{ roomName: string; identity: string; displayName: string } | null>(null)
 
   // Realtime: refresh when a queue event arrives (subscribes to clinic queue channel).
   // The doctor-specific channel would be a future enhancement; for now the clinic-wide
@@ -117,6 +126,28 @@ export function DoctorDashboard({ session, clinicName, doctor, todayAppts, stats
     }
     toast.success('Marked as no-show' + (json.data.requiresPrepayment ? ' (requires prepayment)' : ''))
     router.refresh()
+  }
+
+  async function startVideoCall(appt: TodayAppt) {
+    const roomName = appt.dailyRooms?.[0]?.roomName
+    if (roomName) {
+      setVideoCall({ roomName, identity: `doctor-${doctor.id}`, displayName: `Dr. ${doctor.name}` })
+      return
+    }
+
+    setBusyId(appt.id + '-video')
+    const res = await fetch('/api/livekit/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointmentId: appt.id }),
+    })
+    const json = await res.json()
+    setBusyId(null)
+    if (!json.ok) {
+      toast.error(json.error || 'Failed to create video room')
+      return
+    }
+    setVideoCall({ roomName: json.data.roomName, identity: `doctor-${doctor.id}`, displayName: `Dr. ${doctor.name}` })
   }
 
   const statusMeta = STATUS_META[status] || STATUS_META.off
@@ -251,7 +282,12 @@ export function DoctorDashboard({ session, clinicName, doctor, todayAppts, stats
                         <TableCell className="text-sm">{a.service?.name || doctor.speciality}</TableCell>
                         <TableCell className="text-right text-sm">PKR {a.totalFee}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={apptBadgeVariant(a.status)} className="text-xs capitalize">{a.status.replace('_', ' ')}</Badge>
+                          <div className="flex items-center justify-center gap-1">
+                            <Badge variant={apptBadgeVariant(a.status)} className="text-xs capitalize">{a.status.replace('_', ' ')}</Badge>
+                            {a.modality === 'video' && (
+                              <Badge variant="outline" className="text-xs gap-0.5"><Video className="w-2.5 h-2.5" /> Video</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           {isActive && (
@@ -261,6 +297,13 @@ export function DoctorDashboard({ session, clinicName, doctor, todayAppts, stats
                               </Button>
                               <Button size="sm" variant="outline" className="h-7 text-destructive hover:text-destructive" onClick={() => markNoShow(a.id)} disabled={busyId === a.id + '-noshow'}>
                                 <XCircle className="w-3 h-3 mr-1" />No-show
+                              </Button>
+                            </div>
+                          )}
+                          {a.modality === 'video' && ['booked', 'confirmed', 'in_call'].includes(a.status) && (
+                            <div className="mt-1">
+                              <Button size="sm" variant="default" className="h-7 bg-zinc-800 hover:bg-zinc-700" onClick={() => startVideoCall(a)} disabled={!!busyId}>
+                                <Video className="w-3 h-3 mr-1" />Call
                               </Button>
                             </div>
                           )}
@@ -275,15 +318,64 @@ export function DoctorDashboard({ session, clinicName, doctor, todayAppts, stats
           </CardContent>
         </Card>
 
-        {/* Doctor meta */}
-        <Card>
-          <CardContent className="p-4 grid gap-3 sm:grid-cols-3 text-sm">
-            <div className="flex items-center gap-2"><Stethoscope className="w-4 h-4 text-brand" />{doctor.speciality}</div>
-            <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-brand" />Queue: <span className="capitalize">{doctor.queueMode}</span></div>
-            <div className="flex items-center gap-2"><Users className="w-4 h-4 text-brand" />{doctor.services.length} service{doctor.services.length !== 1 ? 's' : ''}</div>
-          </CardContent>
-        </Card>
+        {/* Doctor meta + schedule */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardContent className="p-4 grid gap-3 text-sm">
+              <div className="flex items-center gap-2"><Stethoscope className="w-4 h-4 text-brand" />{doctor.speciality}</div>
+              <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-brand" />Queue: <span className="capitalize">{doctor.queueMode}</span></div>
+              <div className="flex items-center gap-2"><Users className="w-4 h-4 text-brand" />{doctor.services.length} service{doctor.services.length !== 1 ? 's' : ''}</div>
+              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-brand" />{doctor.slotDurationMin}-min slots</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2"><CalendarDays className="w-4 h-4" />Weekly Schedule</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, idx) => {
+                const s = doctor.schedules?.find((s) => s.dayOfWeek === idx)
+                if (!s) {
+                  return (
+                    <div key={label} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/30">
+                      <span className="font-medium w-8">{label}</span>
+                      <Badge variant="outline" className="text-[10px]">Off</Badge>
+                    </div>
+                  )
+                }
+                let breaks: { start: string; end: string }[] = []
+                try { breaks = JSON.parse(s.breakWindows || '[]') } catch {}
+                return (
+                  <div key={label} className="flex items-center justify-between text-xs py-1 px-2 rounded border">
+                    <span className="font-medium w-8">{label}</span>
+                    <div className="text-right">
+                      <span className="font-mono">{s.startTime} — {s.endTime}</span>
+                      {breaks.length > 0 && (
+                        <span className="text-[10px] text-muted-foreground ml-1">
+                          ({breaks.map((b) => `${b.start}-${b.end}`).join(', ')})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* Video Call Dialog */}
+      {videoCall && (
+        <LiveKitCallDialog
+          open={!!videoCall}
+          onClose={() => setVideoCall(null)}
+          roomName={videoCall.roomName}
+          identity={videoCall.identity}
+          displayName={videoCall.displayName}
+          showEndButton
+        />
+      )}
     </DashboardShell>
   )
 }

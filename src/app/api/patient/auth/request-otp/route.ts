@@ -42,7 +42,8 @@ async function requestOTP(req: NextRequest) {
   if (dayCount >= 10) return err('Daily OTP limit reached. Please try again tomorrow.', 429)
 
   // ── Generate OTP ──
-  const otp = String(Math.floor(100000 + Math.random() * 900000))
+  // TEMP: Hardcoded OTP for testing — remove before production
+  const otp = '123456'
   const otpKey = `otp:code:${phoneHash}`
 
   // ── Persist rate limits + OTP ──

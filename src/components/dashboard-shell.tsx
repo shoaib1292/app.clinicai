@@ -12,8 +12,8 @@ import {
   LayoutDashboard, Building2, Users, CalendarDays, Stethoscope, PhoneCall,
   Wallet, BarChart3, Bot, MessageSquare, Settings, LogOut, Menu, KeyRound,
   Receipt, CreditCard, UserCog, CalendarCheck, Activity, ShieldAlert,
-  Bell, Search, ChevronDown, Moon, Sun, Link2, Star, Zap, Award,
-  Smartphone, ChevronRight, Sparkles, Send, Pill, PackageSearch, Truck, FileText, ShoppingCart, Mic, Video,
+  Bell, Search, ChevronDown, Moon, Sun,
+  Smartphone, ChevronRight, Sparkles, Send, Pill, PackageSearch, Truck, FileText, ShoppingCart, Mic, Monitor,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -40,6 +40,9 @@ export interface DashboardShellProps {
   clinicLogoUrl?: string | null
   navItems: NavItem[]
   children: React.ReactNode
+  enabledFeatures?: Set<string>
+  immersive?: boolean
+  onExitImmersive?: () => void
 }
 
 function organizeNavSections(items: NavItem[], userType: string): NavSection[] {
@@ -54,10 +57,10 @@ function organizeNavSections(items: NavItem[], userType: string): NavSection[] {
   const sectionDefinitions: Record<string, { title: string; labels: string[] }[]> = {
     clinic_admin: [
       { title: 'Clinic', labels: ['WhatsApp', 'Doctors', 'Receptionists', 'Services'] },
-      { title: 'Operations', labels: ['Appointments', 'Patients', 'Conversations', 'Agent Chat Test', 'Reminders'] },
-      { title: 'Marketing', labels: ['Booking Links', 'Agent Persona', 'Message Templates', 'Quick Replies'] },
+      { title: 'Operations', labels: ['Appointments', 'Patients', 'Conversations', 'Agent Persona', 'Reminders'] },
+      { title: 'Marketing', labels: ['Website', 'Booking Links'] },
       { title: 'Finance', labels: ['Bank Accounts', 'Billing & Wallet', 'Payments'] },
-      { title: 'Insights', labels: ['Analytics', 'Doctor Performance', 'Patient Feedback'] },
+      { title: 'Insights', labels: ['Analytics'] },
       { title: 'Pharmacy', labels: ['Medicines', 'Inventory', 'Suppliers & Purchases', 'Prescriptions', 'Pharmacy Counter', 'Pharmacy Reports'] },
     ],
   }
@@ -125,7 +128,7 @@ export const pharmacyNav: NavItem[] = [
   { label: 'Pharmacy Reports', href: '/dashboard/pharmacy/reports', icon: BarChart3 },
 ]
 
-export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, navItems, enabledFeatures, children }: DashboardShellProps) {
+export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, navItems, enabledFeatures, children, immersive, onExitImmersive }: DashboardShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -329,6 +332,16 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
   }[userType]
 
   const sections = organizeNavSections(effectiveNav, userType)
+
+  // ─── Immersive mode: full-viewport editor, no chrome ───
+  // The client component owns its own exit button in its top bar.
+  if (immersive) {
+    return (
+      <div className="h-screen overflow-hidden">
+        {children}
+      </div>
+    )
+  }
 
   function NavItemLink({ item }: { item: NavItem }) {
     const active = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href))
@@ -607,7 +620,6 @@ export const platformAdminNav: NavItem[] = [
   { label: 'Clinics', href: '/dashboard/platform/clinics', icon: Building2 },
   { label: 'LLM Keys', href: '/dashboard/platform/llm-keys', icon: KeyRound },
   { label: 'Assembly AI', href: '/dashboard/platform/assembly-ai', icon: Mic },
-  { label: 'Daily.co Keys', href: '/dashboard/platform/dailyco', icon: Video },
   { label: 'Pricing Rules', href: '/dashboard/platform/pricing', icon: CreditCard },
   { label: 'Payment Accounts', href: '/dashboard/platform/accounts', icon: Wallet },
   { label: 'Platform Staff', href: '/dashboard/platform/staff', icon: UserCog },
@@ -619,26 +631,21 @@ export const platformAdminNav: NavItem[] = [
 
 export const clinicAdminNav: NavItem[] = [
   { label: 'Overview', href: '/dashboard/clinic', icon: LayoutDashboard },
-  { label: 'WhatsApp', href: '/dashboard/clinic/whatsapp', icon: Smartphone },
+  { label: 'Appointments', href: '/dashboard/appointments', icon: CalendarDays },
+  { label: 'Patients', href: '/dashboard/patients', icon: Users },
   { label: 'Doctors', href: '/dashboard/clinic/doctors', icon: Stethoscope },
   { label: 'Receptionists', href: '/dashboard/clinic/receptionists', icon: UserCog },
   { label: 'Services', href: '/dashboard/clinic/services', icon: Activity },
-  { label: 'Appointments', href: '/dashboard/appointments', icon: CalendarDays },
-  { label: 'Patients', href: '/dashboard/patients', icon: Users },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageSquare },
-  { label: 'Agent Chat Test', href: '/dashboard/agent-chat', icon: Bot },
+  { label: 'WhatsApp', href: '/dashboard/clinic/whatsapp', icon: Smartphone },
   { label: 'Reminders', href: '/dashboard/reminders', icon: Bell },
-  { label: 'Booking Links', href: '/dashboard/clinic/booking-links', icon: Link2 },
-  { label: 'Patient Portal', href: '/dashboard/clinic/patient-portal', icon: Smartphone },
+  { label: 'Website', href: '/dashboard/clinic/website', icon: Monitor },
   { label: 'Agent Persona', href: '/dashboard/clinic/agent', icon: Bot },
-  { label: 'Message Templates', href: '/dashboard/clinic/templates', icon: MessageSquare },
-  { label: 'Quick Replies', href: '/dashboard/clinic/quick-replies', icon: Zap },
+  { label: 'Booking Links', href: '/dashboard/clinic/booking-links', icon: PhoneCall },
   { label: 'Bank Accounts', href: '/dashboard/clinic/bank-accounts', icon: Wallet },
   { label: 'Billing & Wallet', href: '/dashboard/billing', icon: Receipt },
-  { label: 'Payments', href: '/dashboard/payments', icon: Wallet },
+  { label: 'Payments', href: '/dashboard/payments', icon: CreditCard },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-  { label: 'Doctor Performance', href: '/dashboard/clinic/doctor-performance', icon: Award },
-  { label: 'Patient Feedback', href: '/dashboard/clinic/feedback', icon: Star },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 

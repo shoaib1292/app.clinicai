@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Loader2, Save, Building2, ToggleLeft, Keyboard, CalendarClock } from 'lucide-react'
+import { Loader2, Save, Building2, ToggleLeft, Keyboard, CalendarClock, Palette } from 'lucide-react'
 import { toast } from 'sonner'
 import { ClinicProfileTab, type SettingsForm } from './components/clinic-profile-tab'
 import { FeaturesToggleTab } from './components/features-toggle-tab'
 import { KeyboardShortcutsTab } from './components/keyboard-shortcuts-tab'
 import { WorkingHoursTab } from './components/schedule-editor'
+import { ClinicBrandingTab } from './components/clinic-branding-tab'
 
 interface Clinic {
   id: string
@@ -27,12 +28,18 @@ interface Clinic {
 
 const SETTINGS_TABS = [
   { value: 'clinic-profile', label: 'Clinic Profile', icon: Building2, description: 'Logo, basic info, and regional settings.' },
+  { value: 'branding', label: 'Branding & Info', icon: Palette, description: 'Colors, fonts, doctor branding, agent persona, and stats.' },
   { value: 'features-toggle', label: 'Features Toggle', icon: ToggleLeft, description: 'Turn agent and payments features on or off.' },
   { value: 'working-hours', label: 'Working Hours', icon: CalendarClock, description: 'Clinic-wide default availability and breaks.' },
   { value: 'keyboard-shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard, description: 'Speed up your workflow with hotkeys.' },
 ] as const
 
-export function SettingsClient({ clinic, userType, subFeatures }: { clinic: Clinic | null; userType: string; subFeatures?: Record<string, boolean> }) {
+export function SettingsClient({ clinic, userType, subFeatures, brandingData }: {
+  clinic: Clinic | null
+  userType: string
+  subFeatures?: Record<string, boolean>
+  brandingData?: any
+}) {
   const [form, setForm] = useState<SettingsForm>({
     name: clinic?.name || '',
     city: clinic?.city || '',
@@ -139,6 +146,14 @@ export function SettingsClient({ clinic, userType, subFeatures }: { clinic: Clin
               />
             ) : (
               <p className="text-sm text-muted-foreground">Profile settings are available to clinic admins only.</p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="branding">
+            {clinic && brandingData ? (
+              <ClinicBrandingTab clinicId={clinic.id} initialData={brandingData} doctors={brandingData.doctors || []} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Branding settings are available to clinic admins only.</p>
             )}
           </TabsContent>
 

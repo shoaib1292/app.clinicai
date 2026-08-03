@@ -1,0 +1,15 @@
+
+> nextjs_tailwind_shadcn_ts@0.2.0 dev
+> prisma generate && concurrently -k -n next,realtime,worker -c cyan,green,yellow "next dev -p 8000" "npx tsx mini-services/realtime/index.ts" "npx tsx worker/index.ts"
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 504ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+'concurrently' is not recognized as an internal or external command,
+operable program or batch file.

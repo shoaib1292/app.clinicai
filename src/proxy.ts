@@ -1,8 +1,81 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { store } from '@/lib/store'
 
 const SESSION_COOKIE = 'clinicsai_session'
 const REFRESH_COOKIE = 'clinicsai_refresh'
+
+// ─── Hostname → Clinic Resolution (Redis-cached) ─────────────────────
+const CACHE_TTL_HIT = 3600   // 1 hour for found clinics
+const CACHE_TTL_MISS = 300   // 5 min for not-found hostnames
+const CACHE_PREFIX = 'hostname:'
+
+function getHostname(request: NextRequest): string {
+  let host = request.headers.get('x-forwarded-host') ||
+         request.headers.get('host') ||
+         request.nextUrl.host
+  // Strip port for matching (e.g., "al-shifa.localhost:8000" → "al-shifa.localhost")
+  return host.replace(/:\d+$/, '')
+}
+
+async function resolveClinicFromHostname(hostname: string): Promise<{ clinicId: string; slug: string } | null> {
+  const APP_DOMAIN = process.env.APP_DOMAIN || 'app.clinicai.pk'
+
+  // Skip resolution for main app domain
+  if (hostname === APP_DOMAIN) return null
+
+  const cacheKey = CACHE_PREFIX + hostname
+
+  // 1. Redis/in-memory cache check
+  const cached = await store.get<string>(cacheKey)
+  if (cached !== null) return cached === 'NONE' ? null : JSON.parse(cached)
+
+  // 2. DB check — custom domain first, then subdomain
+  let result: { clinicId: string; slug: string } | null = null
+
+  try {
+    const { db } = await import('@/lib/db')
+    const customMatch = await db.clinic.findFirst({
+      where: { customDomain: hostname, customDomainVerified: true, websiteEnabled: true },
+      select: { id: true, slug: true }
+    })
+    if (customMatch) result = { clinicId: customMatch.id, slug: customMatch.slug }
+
+    if (!result) {
+      // Try parent domain subdomains (clinicai.pk in prod, localhost in dev)
+      const parentDomains = [process.env.PARENT_DOMAIN || 'clinicai.pk']
+      if (process.env.NODE_ENV !== 'production') parentDomains.push('localhost')
+
+      for (const parentDomain of parentDomains) {
+        if (hostname.endsWith('.' + parentDomain) || hostname === parentDomain) {
+          const slug = hostname === parentDomain ? hostname : hostname.replace('.' + parentDomain, '')
+          const subMatch = await db.clinic.findFirst({
+            where: { slug, websiteEnabled: true },
+            select: { id: true, slug: true }
+          })
+          if (subMatch) {
+            result = { clinicId: subMatch.id, slug: subMatch.slug }
+            break
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Populate cache
+  await store.set(cacheKey, result ? JSON.stringify(result) : 'NONE',
+    result ? CACHE_TTL_HIT : CACHE_TTL_MISS)
+
+  return result
+}
+
+export async function invalidateHostnameCache(slug: string, customDomain: string | null) {
+  const parentDomain = process.env.PARENT_DOMAIN || 'clinicai.pk'
+  await store.del(CACHE_PREFIX + slug + '.' + parentDomain)
+  if (customDomain) await store.del(CACHE_PREFIX + customDomain)
+}
+
+// ─── End hostname resolution ─────────────────────────────────────────
 
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['*']
 const CORS_HEADERS: Record<string, string> = {
@@ -102,6 +175,30 @@ async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const origin = request.headers.get('origin')
 
+  // ─── Clinic website domain resolution ───
+  const hostname = getHostname(request)
+  const clinic = await resolveClinicFromHostname(hostname)
+
+  if (clinic) {
+    // Block dashboard routes on clinic domains
+    if (pathname.startsWith('/dashboard')) {
+      return new NextResponse('Not Found', { status: 404 })
+    }
+
+    // Passthrough: don't rewrite patient portal, API, or special paths
+    if (pathname.startsWith('/p/') || pathname.startsWith('/api/') || pathname.startsWith('/_next/')) {
+      const passthrough = NextResponse.next()
+      applySecurityHeaders(passthrough)
+      return addCorsHeaders(passthrough, origin)
+    }
+
+    // Rewrite to internal website route: /(website)/[slug]/...
+    const url = request.nextUrl.clone()
+    url.pathname = `/website/${clinic.slug}${pathname}`
+    return NextResponse.rewrite(url)
+  }
+  // ─── End clinic domain resolution ───
+
   // CORS preflight
   if (request.method === 'OPTIONS') {
     const res = new NextResponse(null, { status: 204 })
@@ -200,14 +297,15 @@ async function proxy(request: NextRequest) {
 }
 
 function applySecurityHeaders(response: NextResponse) {
-  response.headers.set('X-Frame-Options', 'DENY')
+  // No X-Frame-Options — use CSP frame-ancestors instead (supports cross-origin)
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   const domain = process.env.DOMAIN ? `https://${process.env.DOMAIN}` : ''
   const apiDomain = process.env.API_DOMAIN ? `https://${process.env.API_DOMAIN}` : ''
+  const appDomain = process.env.NEXT_PUBLIC_APP_URL || 'https://app.clinicai.pk'
   response.headers.set(
     'Content-Security-Policy',
-    `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: https://cloudflareinsights.com ${domain} ${apiDomain};`
+    `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: https://cloudflareinsights.com ${domain} ${apiDomain}; frame-ancestors 'self' ${appDomain} http://localhost:8000 http://localhost:3000;`
   )
   if (process.env.NODE_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')

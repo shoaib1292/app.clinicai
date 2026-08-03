@@ -1,0 +1,43 @@
+
+> nextjs_tailwind_shadcn_ts@0.2.0 dev
+> prisma generate && concurrently -k -n next,realtime,worker -c cyan,green,yellow "next dev -p 8000" "npx tsx mini-services/realtime/index.ts" "npx tsx worker/index.ts"
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.3) to .\node_modules\@prisma\client in 688ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+[next] ⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+[next] ▲ Next.js 16.2.10 (Turbopack)
+[next] - Local:         http://localhost:8000
+[next] - Network:       http://192.168.1.5:8000
+[next] - Environments: .env
+[next] ✓ Ready in 1826ms
+[worker] [store] Using RedisStore (STORE_TYPE=redis)
+[worker] ========================================
+[worker]   ClinicAI Worker (PRODUCTION MODE)
+[worker] ========================================
+[worker]   STORE_TYPE=redis — using BullMQ workers
+[worker] ========================================
+[worker] 
+[realtime] [realtime] Redis pub/sub bridge enabled (STORE_TYPE=redis)
+[realtime] [ClinicAI Realtime] Socket.io server listening on port 3003
+[realtime] [ClinicAI Realtime] Frontend connects via: io("/?XTransformPort=3003")
+[realtime] [ClinicAI Realtime] HTTP broadcast endpoint: POST http://localhost:3003/broadcast
+[realtime] [ClinicAI Realtime] Health check: GET http://localhost:3003/health
+[worker] [worker] Prisma connected
+[worker] [worker] Workers ready:
+[worker]   - Reminder worker    (clinicai-reminders)
+[worker]   - Analytics worker   (clinicai-analytics)
+[worker]   - Retention worker   (clinicai-retention)
+[worker]   - Notification worker (clinicai-notifications)
+[worker]   - Campaign worker    (clinicai-campaigns)
+[worker]   - Automation worker  (clinicai-automation)
+[worker]   - Webhook worker     (clinicai-webhook)
+[next] - Experiments (use with caution):
+[next]   · clientTraceMetadata
+[next] 

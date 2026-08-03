@@ -1,23 +1,14 @@
-:81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
+# ClinicAI Caddy Reverse Proxy
+# Catch-all for clinic custom domains + wildcard subdomains
+# Proxies ALL traffic to the Next.js app, which handles clinic routing via proxy.ts
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+:443 {
+  tls {
+    on_demand
+  }
+  reverse_proxy app:3000
+}
 
-	handle {
-		reverse_proxy localhost:8000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+:80 {
+  reverse_proxy app:3000
 }

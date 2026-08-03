@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const tabs = [
@@ -62,6 +62,7 @@ function UserIcon({ active }: { active: boolean }) {
 
 export function PortalBottomTabs({ basePath }: { basePath: string }) {
   const router = useRouter()
+  const pathname = usePathname()
 
   return (
     <nav
@@ -73,7 +74,7 @@ export function PortalBottomTabs({ basePath }: { basePath: string }) {
       <div className="max-w-md mx-auto flex items-center justify-around h-16">
         {tabs.map((tab) => {
           const href = `${basePath}${tab.href}`
-          const isActive = typeof window !== 'undefined' && window.location.pathname === href
+          const isActive = pathname === href || (tab.href === '' && pathname === basePath)
           return (
             <button
               key={tab.label}

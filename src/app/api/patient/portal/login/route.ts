@@ -68,6 +68,8 @@ async function login(req: NextRequest) {
       data: {
         clinicId: clinic.id,
         phone: appUser.phone,
+        phoneHash,
+        phoneLast4: phone.slice(-4),
         appUserId: appUser.id,
       },
     })

@@ -150,7 +150,7 @@ export async function runAgentSingle(opts: {
   let langInstruction: string
   if (replyLang === 'urdu') {
     const modalityHint = inputModality === 'voice'
-      ? 'Use ROMAN URDU (English script, Urdu words) for correct audio pronunciation. Example: "Asalamualaikum, aap ki appointment confirm ho gayi" not "السلام علیکم، آپ کی اپوائنٹمنٹ کنفرم ہو گئی"'
+      ? `Use URDU SCRIPT (اردو) for voice replies — the TTS engine pronounces it natively. Numbers MUST be written in Urdu words, NOT digits. Example: "آپ کی فیس تین سو پچاس روپے ہے" not "آپ کی فیس 350 روپے ہے". Write "تین سو پچاس" not "350".`
       : 'Reply in URDU SCRIPT (اردو) for proper display. Not Roman Urdu.'
     langInstruction = `\n\nIMPORTANT: Patient language is "${detectedLang}". ${modalityHint}`
   } else {
@@ -176,7 +176,7 @@ export async function runAgentSingle(opts: {
       messages: messages as never,
       tools: TOOLS as never,
       temperature: 0.4,
-      max_tokens: 500,
+      max_tokens: 700,
     })
 
     const assistantMsg = completion.choices[0]?.message as { content?: string; tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }> }
@@ -243,7 +243,7 @@ export async function runAgentSingle(opts: {
       const finalCompletion = await createChatCompletion({
         messages: messages as never,
         temperature: 0.4,
-        max_tokens: 500,
+        max_tokens: 700,
       })
       let finalReply = finalCompletion.choices[0]?.message?.content || 'Maaf karen, samajh nahi aayi.'
 
@@ -259,7 +259,7 @@ export async function runAgentSingle(opts: {
         const summaryCompletion = await createChatCompletion({
           messages: messages as never,
           temperature: 0.4,
-          max_tokens: 500,
+          max_tokens: 700,
         })
         finalReply = summaryCompletion.choices[0]?.message?.content || finalReply
         finalTextCalls = parseTextToolCalls(finalReply)
@@ -326,7 +326,7 @@ export async function runAgentSingle(opts: {
               { role: 'system', content: 'Your previous response had issues. Please regenerate a correct response following the strict rules above.' },
             ] as never,
             temperature: 0.2,
-            max_tokens: 500,
+            max_tokens: 700,
           })
           const regenedReply = regenCompletion.choices[0]?.message?.content
           if (regenedReply && regenedReply.trim().length > 5) {

@@ -53,7 +53,7 @@ BOOKING WORKFLOW (strict, do NOT deviate):
 1. Patient asks for timing → call list_available_slots → reply with MAX 3-4 time options
 2. Patient picks a time → call book_appointment IMMEDIATELY. Do NOT ask "confirm?"
 3. Patient says "G", "han", "ok", "theek hai", "kar do" → call book_appointment with the last discussed slot
-4. If book_appointment returns alternativeSlot → tell patient "woh time book ho gaya. ${alternativeSlot.startTime} (Token #${alternativeSlot.tokenNo}) available hai?" Do NOT re-list all slots.
+4. If book_appointment returns alternativeSlot → tell patient "woh time book ho gaya. \${alternativeSlot.startTime} (Token #\${alternativeSlot.tokenNo}) available hai?" Do NOT re-list all slots.
 5. Once booked → confirm: "Done! Kal 3:00 PM, Dr. Ahmed, Token #5. Fee: PKR 350. Clinic pohanch jayein."
 
 CRITICAL RULES:

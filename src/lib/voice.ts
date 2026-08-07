@@ -134,6 +134,10 @@ export async function synthesizeSpeech(
   const processedText = convertNumbersToUrdu(text)
 
   const format = opts?.format || 'wav'
+  // Optimal TTS settings for natural Urdu pronunciation (from Callrolin playground)
+  const speed = opts?.speed ?? 1.0
+  const variety = 0.667
+  const rhythm = 0.8
 
   try {
     const response = await fetch(CALLROLIN_TTS_BASE, {
@@ -145,6 +149,9 @@ export async function synthesizeSpeech(
       body: JSON.stringify({
         model: getTtsModel(),
         text: processedText,
+        speed,
+        pronunciation_variety: variety,
+        rhythm,
       }),
     })
 

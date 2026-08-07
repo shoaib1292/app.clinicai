@@ -157,8 +157,29 @@ export async function POST(req: NextRequest) {
     const senderPhone = remoteJid.split('@')[0] // e.g., "923001234567@s.whatsapp.net" → "923001234567"
     const messageBody = extractMessageBody(data.message)
     const isVoice = isVoiceMessage({ type: data.message.audioMessage ? 'audio' : 'text', message: { type: data.message.audioMessage ? 'audio' : 'text' } })
-    const voiceAudioBase64 = data.message.audioMessage?.base64
+    let voiceAudioBase64 = data.message.audioMessage?.base64
     const voiceMimeType = data.message.audioMessage?.mimetype || 'audio/ogg'
+
+    // Evolution may send only a URL, not base64 — download it
+    const voiceUrl = data.message.audioMessage?.url
+    if (!voiceAudioBase64 && voiceUrl && isVoice && instanceName) {
+      try {
+        const { baseUrl, apiKey } = await (await import('@/lib/evolution')).resolveEvoCredentials()
+        if (baseUrl && apiKey) {
+          const dlRes = await fetch(`${baseUrl}/chat/downloadMedia/${instanceName}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+            body: JSON.stringify({ message: { key: data.key, message: data.message } }),
+          })
+          if (dlRes.ok) {
+            const dlData = await dlRes.json() as { base64?: string; mimetype?: string }
+            if (dlData.base64) voiceAudioBase64 = dlData.base64
+          }
+        }
+      } catch (err) {
+        console.warn('[evo:webhook] Failed to download voice media:', err)
+      }
+    }
 
     // --- RESOLVE/CREATE PATIENT + CONVERSATION ---
     const phoneHash = hashPhone(senderPhone + clinic.id)

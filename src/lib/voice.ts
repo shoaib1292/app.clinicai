@@ -88,8 +88,8 @@ export async function transcribeAudio(
     }
     const { id } = await transcriptRes.json() as { id: string }
 
-    // Step 3: Poll for result
-    for (let i = 0; i < 30; i++) {
+    // Step 3: Poll for result (up to 45s for longer audio)
+    for (let i = 0; i < 90; i++) {
       await new Promise((r) => setTimeout(r, 500))
       const pollRes = await fetch(`${ASSEMBLYAI_TRANSCRIPT}/${id}`, {
         headers: { authorization: apiKey },

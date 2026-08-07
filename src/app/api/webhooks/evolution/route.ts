@@ -7,6 +7,21 @@ import { filterInboundMessage, logFilteredMessage, isDuplicateMessage } from '@/
 import { sendEvolutionMessage, sendEvolutionVoice } from '@/lib/evolution'
 import { isVoiceMessage } from '@/lib/voice'
 
+const REALTIME_PORT = process.env.REALTIME_PORT || '3003'
+
+/** Broadcast event to the realtime Socket.io mini-service (separate process on port 3003). */
+async function broadcastToRealtime(channel: string, message: unknown): Promise<void> {
+  try {
+    await fetch(`http://localhost:${REALTIME_PORT}/broadcast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, message }),
+    })
+  } catch {
+    // Realtime service may be down — fail silently
+  }
+}
+
 /**
  * Evolution API Webhook — receives inbound WhatsApp messages.
  * Per founder doc §8:
@@ -106,10 +121,26 @@ export async function POST(req: NextRequest) {
     // The receiving number is the clinic's connected WhatsApp number
     // Evolution sends the instance name — look up clinic via WhatsAppConnection
     const instanceName = payload.instance || ''
-    const connection = await db.whatsAppConnection.findFirst({
+    let connection = await db.whatsAppConnection.findFirst({
       where: { evoInstanceName: instanceName, status: 'connected' },
       include: { clinic: true },
     })
+    // Fallback: if status='connecting' (connection.update webhook may not have fired yet),
+    // still process the message — the instance is clearly working since we received a message on it.
+    if (!connection) {
+      connection = await db.whatsAppConnection.findFirst({
+        where: { evoInstanceName: instanceName, status: { in: ['connecting', 'pairing'] } },
+        include: { clinic: true },
+      })
+      if (connection) {
+        // Auto-update to connected since we're receiving messages
+        await db.whatsAppConnection.update({
+          where: { id: connection.id },
+          data: { status: 'connected' },
+        })
+        console.log(`[evo:webhook] Auto-promoted instance ${instanceName} to connected (message received)`)
+      }
+    }
     if (!connection || !connection.clinic) {
       console.error(`[evo:webhook] No clinic found for instance ${instanceName}`)
       return NextResponse.json({ ok: true, error: 'clinic not found' }, { status: 404 })
@@ -127,6 +158,7 @@ export async function POST(req: NextRequest) {
     const messageBody = extractMessageBody(data.message)
     const isVoice = isVoiceMessage({ type: data.message.audioMessage ? 'audio' : 'text', message: { type: data.message.audioMessage ? 'audio' : 'text' } })
     const voiceAudioBase64 = data.message.audioMessage?.base64
+    const voiceMimeType = data.message.audioMessage?.mimetype || 'audio/ogg'
 
     // --- RESOLVE/CREATE PATIENT + CONVERSATION ---
     const phoneHash = hashPhone(senderPhone + clinic.id)
@@ -171,12 +203,16 @@ export async function POST(req: NextRequest) {
         providerMsgId,
       },
     })
-    store.publish(`clinic:${clinic.id}:conversations`, {
+    const channel = `clinic:${clinic.id}:conversations`
+    const inboundEvent = {
       type: 'message_received',
       conversationId: conversation.id,
       direction: 'in',
       body: messageBody,
-    })
+    }
+    store.publish(channel, inboundEvent)
+    // Also broadcast to realtime service (separate process on port 3003)
+    void broadcastToRealtime(channel, inboundEvent)
 
     // --- RUN AGENT (if enabled) ---
     if (!clinic.agentEnabled) {
@@ -192,6 +228,7 @@ export async function POST(req: NextRequest) {
       userMessage: messageBody || '',
       modality: isVoice ? 'voice' : 'text',
       voiceAudioBase64: voiceAudioBase64,
+      voiceMimeType: voiceMimeType,
     })
 
     // --- PERSIST OUTBOUND MESSAGE ---
@@ -211,6 +248,12 @@ export async function POST(req: NextRequest) {
       data: { updatedAt: new Date(), lastIntent: result.toolCalls[0]?.name || 'chat' },
     })
     store.publish(`clinic:${clinic.id}:conversations`, {
+      type: 'message_received',
+      conversationId: conversation.id,
+      direction: 'out',
+      body: result.reply,
+    })
+    void broadcastToRealtime(`clinic:${clinic.id}:conversations`, {
       type: 'message_received',
       conversationId: conversation.id,
       direction: 'out',

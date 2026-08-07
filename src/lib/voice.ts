@@ -66,7 +66,7 @@ export async function transcribeAudio(
     }
     const { upload_url } = await uploadRes.json() as { upload_url: string }
 
-    // Step 2: Submit transcription
+    // Step 2: Submit transcription with language detection for Urdu
     const transcriptRes = await fetch(ASSEMBLYAI_TRANSCRIPT, {
       method: 'POST',
       headers: {
@@ -75,8 +75,10 @@ export async function transcribeAudio(
       },
       body: JSON.stringify({
         audio_url: upload_url,
-        language_code: 'ur',
-        language_detection: false,
+        language_detection: true,
+        language_confidence_threshold: 0.4,
+        punctuate: true,
+        format_text: true,
       }),
     })
     if (!transcriptRes.ok) {

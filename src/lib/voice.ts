@@ -4,19 +4,27 @@
  * TTS: Uses Callrolin Humnava-v2 API for native Urdu pronunciation.
  * Per founder doc §11: "Voice in → voice out. This is non-negotiable."
  */
+import fs from 'fs/promises'
+import path from 'path'
 import { convertNumbersToUrdu } from './urdu-numbers'
 
-const CALLROLIN_STT_BASE = 'https://stt.callrolin.com/api/transcribe'
+const ASSEMBLYAI_UPLOAD = 'https://api.assemblyai.com/v2/upload'
+const ASSEMBLYAI_TRANSCRIPT = 'https://api.assemblyai.com/v2/transcript'
 const CALLROLIN_TTS_BASE = 'https://demo.callrolin.com/v1/tts/synthesize'
-const DEFAULT_STT_MODEL = 'callrolin-stt-v1'
 const DEFAULT_TTS_MODEL = 'humnava-v2'
+const LLM_CONFIG_PATH = path.join(process.cwd(), '.llm-config')
 
-function getSttApiKey(): string {
-  return process.env.CALLROLIN_STT_API_KEY || ''
+async function loadLlmConfig(): Promise<Record<string, string>> {
+  try {
+    return JSON.parse(await fs.readFile(LLM_CONFIG_PATH, 'utf-8'))
+  } catch {
+    return {}
+  }
 }
 
-function getSttModel(): string {
-  return process.env.CALLROLIN_STT_MODEL || DEFAULT_STT_MODEL
+async function getSttApiKey(): Promise<string> {
+  const cfg = await loadLlmConfig()
+  return cfg.sttApiKey || process.env.ASSEMBLYAI_API_KEY || ''
 }
 
 function getTtsApiKey(): string {
@@ -28,46 +36,78 @@ function getTtsModel(): string {
 }
 
 // ---------------------------------------------------------------------------
-// STT — Transcribe audio to text via Callrolin STT API
+// STT — Transcribe audio to text via AssemblyAI
 // ---------------------------------------------------------------------------
 
 export async function transcribeAudio(
   audioBase64: string,
-  mimeType?: string
+  _mimeType?: string
 ): Promise<{ text: string; error?: string }> {
-  const apiKey = getSttApiKey()
+  const apiKey = await getSttApiKey()
   if (!apiKey) {
-    return { text: '', error: 'CALLROLIN_STT_API_KEY not configured' }
+    return { text: '', error: 'ASSEMBLYAI_API_KEY not configured' }
   }
 
   try {
+    // Step 1: Upload audio
     const audioBuffer = Buffer.from(audioBase64, 'base64')
-    const ext = mimeType?.includes('ogg') || mimeType?.includes('opus') ? 'ogg'
-      : mimeType?.includes('mp3') || mimeType?.includes('mpeg') ? 'mp3'
-      : 'wav'
-
-    const formData = new FormData()
-    formData.append('file', new Blob([audioBuffer]), `audio.${ext}`)
-    formData.append('language', 'ur')
-    formData.append('model', getSttModel())
-
-    const response = await fetch(CALLROLIN_STT_BASE, {
+    const uploadRes = await fetch(ASSEMBLYAI_UPLOAD, {
       method: 'POST',
-      headers: { 'X-API-Key': apiKey },
-      body: formData,
+      headers: {
+        'authorization': apiKey,
+        'content-type': 'application/octet-stream',
+      },
+      body: audioBuffer,
     })
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => 'Unknown error')
-      console.error(`[STT] Callrolin STT error ${response.status}:`, errText)
-      return { text: '', error: `STT API error: ${response.status}` }
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => 'Unknown error')
+      console.error(`[STT] AssemblyAI upload error ${uploadRes.status}:`, errText)
+      return { text: '', error: `STT upload error: ${uploadRes.status}` }
     }
+    const { upload_url } = await uploadRes.json() as { upload_url: string }
 
-    const result = await response.json() as { text?: string; error?: string }
-    if (!result.text || result.text.trim().length === 0) {
-      return { text: '', error: result.error || 'Empty transcription result' }
+    // Step 2: Submit transcription
+    const transcriptRes = await fetch(ASSEMBLYAI_TRANSCRIPT, {
+      method: 'POST',
+      headers: {
+        'authorization': apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        audio_url: upload_url,
+        language_code: 'ur',
+        language_detection: false,
+      }),
+    })
+    if (!transcriptRes.ok) {
+      const errText = await transcriptRes.text().catch(() => 'Unknown error')
+      console.error(`[STT] AssemblyAI transcript error ${transcriptRes.status}:`, errText)
+      return { text: '', error: `STT transcript error: ${transcriptRes.status}` }
     }
-    return { text: result.text.trim() }
+    const { id } = await transcriptRes.json() as { id: string }
+
+    // Step 3: Poll for result
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 500))
+      const pollRes = await fetch(`${ASSEMBLYAI_TRANSCRIPT}/${id}`, {
+        headers: { authorization: apiKey },
+      })
+      if (!pollRes.ok) continue
+      const poll = await pollRes.json() as {
+        status: string
+        text?: string
+        error?: string
+      }
+      if (poll.status === 'completed') {
+        const text = poll.text?.trim() || ''
+        if (!text) return { text: '', error: 'Empty transcription result' }
+        return { text }
+      }
+      if (poll.status === 'error') {
+        return { text: '', error: poll.error || 'AssemblyAI transcription failed' }
+      }
+    }
+    return { text: '', error: 'AssemblyAI transcription timed out' }
   } catch (err) {
     console.error('[STT] Transcription error:', err)
     return { text: '', error: String(err) }

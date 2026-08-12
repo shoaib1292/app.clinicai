@@ -21,22 +21,34 @@ export function EditableText({
   style,
   placeholder = 'Click to edit...',
 }: EditableTextProps) {
-  const [editing, setEditing] = useState(false)
-  const [text, setText] = useState(value)
+  const [editOn, setEditOn] = useState(false)
   const [saving, setSaving] = useState(false)
-  const ref = useRef<HTMLElement>(null)
+  const elRef = useRef<HTMLElement | null>(null)
+  const lastSavedRef = useRef(value)
 
+  // Detect edit mode only after client mount — no hydration mismatch.
   useEffect(() => {
-    setText(value)
+    setEditOn(new URLSearchParams(window.location.search).get('edit') === '1')
+  }, [])
+
+  // Set initial textContent on DOM after mount (not via JSX children).
+  // Sync when value prop changes externally and user is not editing.
+  useEffect(() => {
+    lastSavedRef.current = value
+    const el = elRef.current
+    if (el && document.activeElement !== el) {
+      el.textContent = value
+    }
   }, [value])
 
-  const isEditMode =
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('edit') === '1'
-
   const handleSave = useCallback(async () => {
-    const newText = ref.current?.textContent || ''
-    if (newText === value) return
+    const el = elRef.current
+    if (!el) return
+    const newText = el.textContent?.trim() || ''
+    if (newText === lastSavedRef.current) {
+      el.textContent = lastSavedRef.current
+      return
+    }
     setSaving(true)
     try {
       await fetch('/api/website/blocks/update-content', {
@@ -44,39 +56,35 @@ export function EditableText({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ blockId, fieldName, value: newText }),
       })
+      lastSavedRef.current = newText
     } catch (err) {
       console.error('[EditableText] Save failed:', err)
+      if (el) el.textContent = lastSavedRef.current
     } finally {
       setSaving(false)
     }
-  }, [blockId, fieldName, value])
+  }, [blockId, fieldName])
 
   const Tag = tagName as React.ElementType
 
-  if (!isEditMode) {
-    return <Tag className={className} style={style}>{text || placeholder}</Tag>
-  }
-
-  const base = `${className} ${editing ? 'outline-none ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50 cursor-text'} rounded px-1 -mx-1 transition-all`
-  const editClass = saving ? `${base} opacity-50` : base
-
+  // Single render path — server and client produce identical element
+  // structure. contentEditable is false on server and initial client,
+  // toggles only after client-side useEffect. No tree structural change.
   return (
     <Tag
-      ref={ref}
-      contentEditable={!saving}
+      ref={elRef}
+      contentEditable={editOn && !saving}
       suppressContentEditableWarning
-      onClick={() => { if (!saving) setEditing(true) }}
-      onBlur={() => {
-        setEditing(false)
-        handleSave()
-      }}
-      onInput={(e: React.FormEvent) => {
-        setText((e.target as HTMLElement).textContent || '')
-      }}
-      className={editClass.trim()}
+      onBlur={editOn ? handleSave : undefined}
+      className={
+        editOn
+          ? `${className} outline-none focus:ring-2 focus:ring-black/30 focus:bg-black/[0.03] hover:bg-muted/50 cursor-text rounded px-1 -mx-1 transition-all ${saving ? 'opacity-50 pointer-events-none' : ''}`.trim()
+          : className
+      }
       style={style}
+      suppressHydrationWarning
     >
-      {text}
+      {value}
     </Tag>
   )
 }

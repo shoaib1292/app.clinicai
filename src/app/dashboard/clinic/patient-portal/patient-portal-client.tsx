@@ -23,8 +23,8 @@ interface ClinicData {
 export function PatientPortalClient({ clinic }: { clinic: ClinicData }) {
   const router = useRouter()
   const [enabled, setEnabled] = useState(clinic.patientPortalEnabled)
-  const [primaryColor, setPrimaryColor] = useState(clinic.brandingPrimaryColor || '#0891b2')
-  const [secondaryColor, setSecondaryColor] = useState(clinic.brandingSecondaryColor || '#06b6d4')
+  const [primaryColor, setPrimaryColor] = useState(clinic.brandingPrimaryColor || '#111111')
+  const [secondaryColor, setSecondaryColor] = useState(clinic.brandingSecondaryColor || '#333333')
   const [saving, setSaving] = useState(false)
 
   const domain = typeof window !== 'undefined' ? window.location.origin : ''
@@ -126,7 +126,7 @@ export function PatientPortalClient({ clinic }: { clinic: ClinicData }) {
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
                   className="flex-1 font-mono text-sm"
-                  placeholder="#0891b2"
+                  placeholder="#111111"
                 />
               </div>
             </div>
@@ -143,7 +143,7 @@ export function PatientPortalClient({ clinic }: { clinic: ClinicData }) {
                   value={secondaryColor}
                   onChange={(e) => setSecondaryColor(e.target.value)}
                   className="flex-1 font-mono text-sm"
-                  placeholder="#06b6d4"
+                  placeholder="#333333"
                 />
               </div>
             </div>

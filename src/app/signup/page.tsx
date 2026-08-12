@@ -4,7 +4,11 @@ import { SignupClient } from './signup-client'
 
 export const metadata = { title: 'Register — ClinicAI' }
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ provider?: string; email?: string; name?: string }>
+}) {
   const session = await getSession()
   if (session) {
     const dest =
@@ -19,5 +23,6 @@ export default async function SignupPage() {
         : '/'
     redirect(dest)
   }
-  return <SignupClient />
+  const params = await searchParams
+  return <SignupClient provider={params.provider} prefilledEmail={params.email} prefilledName={params.name} />
 }

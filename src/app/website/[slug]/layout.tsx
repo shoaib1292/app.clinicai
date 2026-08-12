@@ -74,7 +74,7 @@ export default async function WebsiteLayoutPage({
   if (!clinic) notFound()
 
   const theme = getTheme(clinic.themeId || 'modern')
-  const brandColor = clinic.brandColor || '#0891b2'
+  const brandColor = clinic.brandColor || '#111111'
 
   return (
     <div

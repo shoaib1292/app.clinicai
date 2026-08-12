@@ -14,6 +14,7 @@ import { store } from '@/lib/store'
 import { hashPassword } from '@/lib/auth'
 import { auditLog } from '@/lib/session'
 import { ok, err, handle } from '@/lib/api'
+import { getInviteData, consumeInvite } from '@/lib/staff-invite'
 
 interface ResetPasswordBody {
   token: string
@@ -28,12 +29,14 @@ async function resetPassword(req: NextRequest) {
   if (!password) return err('New password is required', 400)
   if (password.length < 8) return err('Password must be at least 8 characters', 400)
 
-  // Validate reset token
+  // Validate reset token (either password-reset or staff-invite)
   const key = `password-reset:${token}`
   const resetData = await store.get<{ userId: string; userType: string; email: string }>(key)
-  if (!resetData) return err('Invalid or expired reset token', 400)
+  const inviteData = resetData ? null : await getInviteData(token)
+  const data = resetData || inviteData
+  if (!data) return err('Invalid or expired reset token', 400)
 
-  const { userId, userType, email } = resetData
+  const { userId, userType, email } = data
 
   // Hash the new password
   const passwordHash = await hashPassword(password)
@@ -81,6 +84,30 @@ async function resetPassword(req: NextRequest) {
       }
       break
     }
+    case 'pharmacist': {
+      const user = await db.pharmacist.findUnique({ where: { id: userId } })
+      if (user && user.email === email) {
+        await db.pharmacist.update({ where: { id: userId }, data: { passwordHash } })
+        updated = true
+      }
+      break
+    }
+    case 'lab_admin': {
+      const user = await db.labAdmin.findUnique({ where: { id: userId } })
+      if (user && user.email === email) {
+        await db.labAdmin.update({ where: { id: userId }, data: { passwordHash } })
+        updated = true
+      }
+      break
+    }
+    case 'accountant': {
+      const user = await db.accountant.findUnique({ where: { id: userId } })
+      if (user && user.email === email) {
+        await db.accountant.update({ where: { id: userId }, data: { passwordHash } })
+        updated = true
+      }
+      break
+    }
     default:
       return err('Invalid user type', 400)
   }
@@ -89,6 +116,7 @@ async function resetPassword(req: NextRequest) {
 
   // Invalidate token (delete from store)
   await store.del(key)
+  if (inviteData) await consumeInvite(token)
 
   // Audit log
   await auditLog({

@@ -5,6 +5,8 @@ import { hashPhone, last4 } from '@/lib/auth'
 import { computeFees, computeRefund } from '@/lib/schedule'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
+import { resolveCalendarProvider, resolveMeetingProvider } from '@/lib/providers/registry'
+import { resolveBookingDiscount, applyDiscountToFees, recordRedemption } from '@/lib/discounts'
 
 interface BookBody {
   doctorId: string
@@ -18,6 +20,8 @@ interface BookBody {
   paymentMode?: string
   createdVia?: string
   modality?: string
+  promoCode?: string
+  refCode?: string
 }
 
 async function list(req: NextRequest) {
@@ -54,7 +58,7 @@ async function list(req: NextRequest) {
 async function book(req: NextRequest) {
   const { session, clinicId } = await requireClinicScope()
   const body = (await req.json()) as BookBody
-  const { doctorId, slotId, patientPhone, patientName, patientGender, familyMemberId, serviceId, channel, paymentMode, createdVia } = body
+  const { doctorId, slotId, patientPhone, patientName, patientGender, familyMemberId, serviceId, channel, paymentMode, createdVia, promoCode, refCode } = body
 
   if (!doctorId || !slotId || !patientPhone) return err('doctorId, slotId, patientPhone required', 400)
 
@@ -100,12 +104,19 @@ async function book(req: NextRequest) {
       patient = await db.patient.update({ where: { id: patient.id }, data: { name: patientName, gender: patientGender || patient.gender } })
     }
 
-    // Resolve service + fees
+    // Resolve service
     let service = serviceId ? await db.service.findFirst({ where: { id: serviceId, clinicId } }) : null
     if (!service) {
       service = await db.service.findFirst({ where: { doctorId, clinicId } })
     }
     if (!service) return err('No service configured for this doctor', 400)
+
+    // ── Resolve discount ──
+    const discount = await resolveBookingDiscount({
+      clinicId, promoCode, refCode,
+      patientId: patient.id, serviceId: service.id, doctorId,
+    })
+    if (discount.error) return err(discount.error, 400)
 
     // Get pricing rule
     const clinicRule = await db.pricingRule.findFirst({ where: { clinicId } })
@@ -113,12 +124,15 @@ async function book(req: NextRequest) {
     const platformFeeDefault = clinicRule?.platformFeeDefault ?? globalRule?.platformFeeDefault ?? 50
     const platformFeeOverride = clinicRule?.platformFeeOverride ?? null
 
+    const clinicMarkup = clinicRule?.markupDefault ?? globalRule?.markupDefault ?? 0
+
     const fees = computeFees({
       doctorFee: service.baseFee,
-      extraClinicFee: service.extraClinicFee,
+      clinicMarkup,
       platformFeeDefault,
       platformFeeOverride,
     })
+    const discountedFees = applyDiscountToFees(fees, discount.discountAmount)
 
     // Mark slot as booked
     await db.slot.update({ where: { id: slotId }, data: { status: 'booked', holdExpiresAt: null } })
@@ -141,10 +155,10 @@ async function book(req: NextRequest) {
         end,
         status: 'booked',
         channel: channel || 'manual',
-        doctorFee: fees.doctorFee,
-        extraClinicFee: fees.extraClinicFee,
-        platformFee: fees.platformFee,
-        totalFee: fees.total,
+        doctorFee: discountedFees.doctorFee,
+        clinicMarkup: discountedFees.clinicMarkup,
+        platformFee: discountedFees.platformFee,
+        totalFee: discountedFees.total,
         paymentStatus: 'pending',
         paymentMode: paymentMode || 'cash',
         createdByStaffId: session.sub,
@@ -159,24 +173,48 @@ async function book(req: NextRequest) {
       data: {
         appointmentId: appt.id,
         baseDoctorFee: fees.doctorFee,
-        extraClinicFee: fees.extraClinicFee,
+        clinicMarkup: fees.clinicMarkup,
         platformFee: fees.platformFee,
         platformFeeOverride: platformFeeOverride,
-        total: fees.total,
+        total: discountedFees.total,
+        discount: discount.discountAmount,
         currency: 'PKR',
       },
     })
 
+    // ── Record redemption ──
+    if (discount.offerId) {
+      await recordRedemption({
+        clinicId, offerId: discount.offerId, appointmentId: appt.id,
+        patientId: patient.id, discountAmount: discount.discountAmount,
+        appliedBy: discount.appliedBy ?? 'promo',
+      })
+    }
+
+    // ── Record referral event ──
+    if (discount.referralCodeId && discount.referrerPatientId) {
+      await db.referralEvent.create({
+        data: {
+          clinicId, referralCodeId: discount.referralCodeId,
+          referrerPatientId: discount.referrerPatientId,
+          refereePhoneHash: phoneHash, refereePatientId: patient.id,
+          appointmentId: appt.id, status: 'booked',
+          discountApplied: discount.discountAmount,
+          rewardAmount: discount.refereeRewardAmount ?? 0,
+        },
+      })
+    }
+
     // Debit platform fee from clinic credit ledger
     if (clinicRule?.billingMode !== 'invoice') {
+      const platformCharge = Math.max(0, discountedFees.platformFee - discount.discountAmount)
       const lastEntry = await db.creditLedger.findFirst({ where: { clinicId }, orderBy: { createdAt: 'desc' } })
-      const balanceAfter = (lastEntry?.balanceAfter ?? 0) - fees.platformFee
+      const balanceAfter = (lastEntry?.balanceAfter ?? 0) - platformCharge
       await db.creditLedger.create({
         data: {
           clinicId,
           type: 'debit',
-          amount: fees.platformFee,
-          reason: 'appointment_fee',
+          amount: platformCharge,
           appointmentId: appt.id,
           balanceAfter,
         },
@@ -217,6 +255,9 @@ async function book(req: NextRequest) {
 
     await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'appointment_booked', target: appt.id, metadata: { doctorId, slotId, patientId: patient.id, totalFee: fees.total } })
 
+    // ── Google Calendar Sync (async, non-blocking) ──
+    syncCalendarEvent(appt.id, clinicId, doctor, patient, start, end, body.modality).catch(() => {})
+
     return ok({
       appointmentId: appt.id,
       patient: { id: patient.id, name: patient.name, phone: patient.phone },
@@ -230,3 +271,60 @@ async function book(req: NextRequest) {
 
 export const GET = handle(list)
 export const POST = handle(book)
+
+// ── Google Calendar + Meet Sync ──
+// Fire-and-forget: sync calendar event and optionally create Meet link.
+// Failures are non-blocking — the appointment is already booked in DB.
+
+async function syncCalendarEvent(
+  appointmentId: string,
+  clinicId: string,
+  doctor: { name: string; email?: string | null },
+  patient: { name: string | null; email?: string | null },
+  start: Date,
+  end: Date,
+  modality?: string,
+) {
+  try {
+    const calResult = await resolveCalendarProvider(clinicId)
+    if (!calResult) return
+
+    const attendees: { email: string; displayName?: string }[] = []
+    if (doctor.email) attendees.push({ email: doctor.email, displayName: doctor.name })
+    if (patient.email) attendees.push({ email: patient.email, displayName: patient.name || undefined })
+
+    let conferenceData = undefined
+    if (modality === 'video') {
+      const meetResult = await resolveMeetingProvider(clinicId)
+      if (meetResult.type === 'google_meet') {
+        conferenceData = {
+          createRequest: {
+            requestId: `appt-${appointmentId}`,
+            conferenceSolutionKey: { type: 'hangoutsMeet' as const },
+          },
+        }
+      }
+    }
+
+    const event = await calResult.provider.createEvent({
+      summary: `${doctor.name} — ${patient.name || 'Patient'}`,
+      start,
+      end,
+      attendees,
+      timezone: 'Asia/Karachi',
+      conferenceData,
+      metadata: { appointmentId, clinicId },
+    })
+
+    // If Meet link was generated, store it on the appointment
+    if (event.meetLink) {
+      await db.appointment.update({
+        where: { id: appointmentId },
+        data: { meetLink: event.meetLink },
+      })
+    }
+  } catch (e) {
+    console.error('Calendar sync failed for appointment', appointmentId, e)
+  }
+}
+

@@ -136,11 +136,11 @@ export function AIWizard({ clinicId, slug, onComplete }: { clinicId: string; slu
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
               i < step ? 'text-white' : i === step ? 'text-white ring-2 ring-offset-2' : 'text-muted-foreground bg-muted'
             }`}
-              style={i <= step ? { background: 'var(--website-primary, #0891b2)' } : {}}>
+              style={i <= step ? { background: 'var(--website-primary, #111111)' } : {}}>
               {i < step ? <Check className="w-4 h-4" /> : i + 1}
             </div>
             {i < STEPS.length - 1 && <div className={`h-0.5 flex-1 ${i < step ? '' : 'bg-muted'}`}
-              style={i < step ? { background: 'var(--website-primary, #0891b2)' } : {}} />}
+              style={i < step ? { background: 'var(--website-primary, #111111)' } : {}} />}
           </div>
         ))}
       </div>
@@ -164,7 +164,7 @@ export function AIWizard({ clinicId, slug, onComplete }: { clinicId: string; slu
           {step === 0 && (
             <div className="text-center py-8 space-y-4">
               <div className="w-20 h-20 rounded-2xl mx-auto flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, var(--website-primary, #0891b2), var(--website-primary-light, #0891b21a))' }}>
+                style={{ background: 'linear-gradient(135deg, var(--website-primary, #111111), var(--website-primary-light, rgba(17,17,17,0.1)))' }}>
                 <Sparkles className="w-10 h-10 text-white" />
               </div>
               <h2 className="text-xl font-bold">AI Website Builder</h2>
@@ -285,7 +285,7 @@ export function AIWizard({ clinicId, slug, onComplete }: { clinicId: string; slu
                     <div key={s.key} className="flex items-center gap-3">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 transition-all ${
                         i < genStep ? 'text-white' : i === genStep ? 'text-white animate-pulse' : 'bg-muted text-muted-foreground'
-                      }`} style={i <= genStep ? { background: 'var(--website-primary, #0891b2)' } : {}}>
+                      }`} style={i <= genStep ? { background: 'var(--website-primary, #111111)' } : {}}>
                         {i < genStep ? <Check className="w-3 h-3" /> : i === genStep ? <Loader2 className="w-3 h-3 animate-spin" /> : i + 1}
                       </div>
                       <span className={`text-sm ${i <= genStep ? 'font-medium' : 'text-muted-foreground'}`}>

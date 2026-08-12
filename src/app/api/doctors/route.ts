@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireClinicScope, auditLog } from '@/lib/session'
 import { hashPassword } from '@/lib/auth'
 import { ok, err, handle } from '@/lib/api'
+import { sendStaffInvite, getClinicNameForUser } from '@/lib/staff-invite'
 
 async function list(_req: NextRequest) {
   const { clinicId } = await requireClinicScope()
@@ -70,6 +71,13 @@ async function create(req: NextRequest) {
   }
 
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'doctor_created', target: doctor.id, metadata: { name, speciality } })
+
+  // Send invitation email with password-setup link (7-day expiry) when no password was set
+  if (email && !password) {
+    const clinicName = await getClinicNameForUser('doctor', clinicId)
+    await sendStaffInvite({ id: doctor.id, name: doctor.name, email: doctor.email || '', userType: 'doctor' }, clinicName)
+  }
+
   return ok(doctor)
 }
 

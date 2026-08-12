@@ -19,9 +19,15 @@ async function list(req: NextRequest) {
   await generateSlotsForDoctorDate(doctorId, date)
 
   const slots = await db.slot.findMany({
-    where: { doctorId, date, status: 'open' },
+    where: {
+      doctorId,
+      date: {
+        gte: new Date(Date.UTC(y, m - 1, d)),
+        lt: new Date(Date.UTC(y, m - 1, d + 1)),
+      },
+      status: 'open',
+    },
     orderBy: { startTime: 'asc' },
-    take: 20,
   })
   const now = new Date()
   const open = slots.filter((s) => !s.holdExpiresAt || s.holdExpiresAt < now)

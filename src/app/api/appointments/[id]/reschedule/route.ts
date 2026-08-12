@@ -3,11 +3,13 @@ import { db } from '@/lib/db'
 import { requireClinicScope, auditLog } from '@/lib/session'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
+import { resolveCalendarProvider } from '@/lib/providers/registry'
 
 // Reschedule an appointment to a new slot (optionally on a different doctor).
 // - Releases the old slot (status → open)
 // - Claims the new slot (status → booked)
 // - Updates appointment start/end/slotId/doctorId
+// - Syncs Google Calendar event
 // - Deletes old pending reminders, creates new ones at T-24h / T-2h / T-30min
 async function reschedule(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { session, clinicId } = await requireClinicScope()
@@ -108,6 +110,9 @@ async function reschedule(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    // ── Google Calendar Sync (async, non-blocking) ──
+    syncCalendarReschedule(id, clinicId, doc.name, newStart, newEnd).catch(() => {})
+
     // Publish realtime event
     store.publish(`clinic:${clinicId}:queue`, {
       type: 'appointment_rescheduled',
@@ -141,6 +146,33 @@ async function reschedule(req: NextRequest, { params }: { params: Promise<{ id: 
     })
   } finally {
     await store.releaseLock(`slot:${body.newSlotId}`, lockToken)
+  }
+}
+
+async function syncCalendarReschedule(
+  appointmentId: string,
+  clinicId: string,
+  doctorName: string,
+  newStart: Date,
+  newEnd: Date,
+) {
+  try {
+    const calResult = await resolveCalendarProvider(clinicId)
+    if (!calResult) return
+
+    // Find the Google Calendar event for this appointment
+    const gEvent = await db.googleCalendarEvent.findFirst({
+      where: { appointmentId },
+    })
+    if (!gEvent) return
+
+    await calResult.provider.updateEvent(gEvent.id, {
+      start: newStart,
+      end: newEnd,
+      summary: `${doctorName} — Appointment (Rescheduled)`,
+    })
+  } catch (e) {
+    console.error('Calendar reschedule sync failed for appointment', appointmentId, e)
   }
 }
 

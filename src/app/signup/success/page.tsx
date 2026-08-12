@@ -77,14 +77,18 @@ export default function SignupSuccessPage() {
 
           <div className="flex flex-col gap-3">
             <Button size="lg" asChild>
-              <a href="/dashboard/clinic/whatsapp">
-                <Smartphone className="size-4 mr-1" /> WhatsApp abhi connect karein
+              <Link href="/onboarding">
+                <Sparkles className="size-4 mr-1" /> Complete Your Clinic Setup
                 <ArrowRight className="size-4" />
-              </a>
+              </Link>
             </Button>
-            <Button variant="outline" asChild>
+            <p className="text-xs text-center text-muted-foreground">
+              Set up your clinic details, add doctors & staff, configure services,<br />
+              and connect WhatsApp — all in one guided flow.
+            </p>
+            <Button variant="outline" size="sm" asChild>
               <a href={`/dashboard/clinic`}>
-                Dashboard mein jaayein
+                Skip setup, go to dashboard
               </a>
             </Button>
           </div>

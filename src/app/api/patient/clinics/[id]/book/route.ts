@@ -11,6 +11,7 @@ import { encryptPhone } from '@/lib/phone-encryption'
 import { hashPhone, last4 } from '@/lib/auth'
 import { publishAppointmentBooked } from '@/lib/automation-publisher'
 import { ok, err, handle } from '@/lib/api'
+import { resolveBookingDiscount, applyDiscountToFees, recordRedemption } from '@/lib/discounts'
 
 async function book(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: clinicId } = await params
@@ -23,9 +24,11 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
     paymentMode?: string
     paymentProof?: string
     modality?: string
+    promoCode?: string
+    refCode?: string
   }
 
-  const { doctorId, slotId, serviceId } = body
+  const { doctorId, slotId, serviceId, promoCode, refCode } = body
   if (!doctorId || !slotId) return err('doctorId and slotId are required', 400)
 
   const doctor = await db.doctor.findUnique({ where: { id: doctorId } })
@@ -83,8 +86,37 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
     const durationMin = doctor.slotDurationMin || 15
     const end = new Date(start.getTime() + durationMin * 60 * 1000)
 
-    // ── Compute fees ──
-    const fees = computeFees({ doctorFee: 0, extraClinicFee: 0 })
+    // ── Resolve service + compute real fees ──
+    let service = serviceId ? await db.service.findFirst({ where: { id: serviceId, clinicId } }) : null
+    if (!service) {
+      service = await db.service.findFirst({ where: { doctorId, clinicId } })
+    }
+    if (!service) return err('No service configured for this doctor', 400)
+
+    const clinicRule = await db.pricingRule.findFirst({ where: { clinicId } })
+    const globalRule = await db.pricingRule.findFirst({ where: { scope: 'global' } })
+    const platformFeeDefault = clinicRule?.platformFeeDefault ?? globalRule?.platformFeeDefault ?? 50
+    const platformFeeOverride = clinicRule?.platformFeeOverride ?? null
+    const clinicMarkup = clinicRule?.markupDefault ?? globalRule?.markupDefault ?? 0
+
+    const fees = computeFees({ doctorFee: service.baseFee, clinicMarkup, platformFeeDefault, platformFeeOverride })
+
+    // ── Resolve discount ──
+    const discount = await resolveBookingDiscount({
+      clinicId, promoCode, refCode,
+      patientId: patient.id, refereePhone: appUser.phone,
+      serviceId: service.id, doctorId,
+    })
+    if (discount.error) return err(discount.error, 400)
+
+    // ── Auto-apply patient reward balance ──
+    let rewardUsed = 0
+    if (patient.rewardBalance > 0) {
+      rewardUsed = Math.min(patient.rewardBalance, fees.total - discount.discountAmount)
+    }
+
+    const totalDiscount = discount.discountAmount + rewardUsed
+    const discountedFees = applyDiscountToFees(fees, totalDiscount)
 
     // ── Create appointment ──
     const appt = await db.appointment.create({
@@ -96,15 +128,61 @@ async function book(req: NextRequest, { params }: { params: Promise<{ id: string
         start,
         end,
         status: 'booked',
-        serviceId: serviceId || null,
+        serviceId: service.id,
         paymentMode: body.paymentMode || 'screenshot',
-        totalFee: fees.total,
-        doctorFee: fees.doctorFee,
-        platformFee: fees.platformFee,
+        totalFee: discountedFees.total,
+        doctorFee: discountedFees.doctorFee,
+        clinicMarkup: discountedFees.clinicMarkup,
+        platformFee: discountedFees.platformFee,
         isTelemedicine: body.modality === 'video',
         modality: body.modality || 'in_clinic',
       },
     })
+
+    // ── Fee breakdown ──
+    await db.appointmentFees.create({
+      data: {
+        appointmentId: appt.id,
+        baseDoctorFee: fees.doctorFee,
+        clinicMarkup: fees.clinicMarkup,
+        platformFee: fees.platformFee,
+        platformFeeOverride,
+        total: discountedFees.total,
+        discount: totalDiscount,
+        currency: 'PKR',
+      },
+    })
+
+    // ── Deduct reward balance ──
+    if (rewardUsed > 0) {
+      await db.patient.update({
+        where: { id: patient.id },
+        data: { rewardBalance: { decrement: rewardUsed } },
+      })
+    }
+
+    // ── Record redemption ──
+    if (discount.offerId && discount.discountAmount > 0) {
+      await recordRedemption({
+        clinicId, offerId: discount.offerId, appointmentId: appt.id,
+        patientId: patient.id, discountAmount: discount.discountAmount,
+        appliedBy: discount.appliedBy ?? 'promo',
+      })
+    }
+
+    // ── Record referral event ──
+    if (discount.referralCodeId && discount.referrerPatientId) {
+      await db.referralEvent.create({
+        data: {
+          clinicId, referralCodeId: discount.referralCodeId,
+          referrerPatientId: discount.referrerPatientId,
+          refereePhoneHash: phoneHash, refereePatientId: patient.id,
+          appointmentId: appt.id, status: 'booked',
+          discountApplied: discount.discountAmount,
+          rewardAmount: discount.refereeRewardAmount ?? 0,
+        },
+      })
+    }
 
     // ── Mark slot as booked ──
     await db.slot.update({

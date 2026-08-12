@@ -16,6 +16,15 @@ export default async function ClinicHomePage() {
     redirect('/dashboard')
   }
 
+  // Enforce email verification for password-signup admins.
+  const admin = await db.clinicAdmin.findUnique({
+    where: { id: session.sub },
+    select: { emailVerified: true },
+  })
+  if (!admin?.emailVerified) {
+    redirect(`/signup/verify?email=${encodeURIComponent(admin?.email || session.email || '')}`)
+  }
+
   const clinic = await db.clinic.findUnique({
     where: { id: session.clinicId },
     include: {

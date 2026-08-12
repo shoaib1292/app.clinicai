@@ -1,13 +1,13 @@
 # ui
 See [ui/taste.md](ui/taste.md)
 # auth
-- 2FA must be optional: only enforce 2FA during login if the user has already enabled it in their settings; never block login for users who haven't set up 2FA. Confidence: 0.85
-
+See [auth/taste.md](auth/taste.md)
 # product-vision
 - ClinicAI is fundamentally a patient acquisition system — the core goal is enabling every clinic to maximize their patient appointment bookings. Feature prioritization should serve this goal: increasing patient volume and making booking frictionless. Confidence: 0.80
 - V1 of any feature must be simple and opinionated — pickers, toggles, and predefined options over drag-and-drop builders, WYSIWYG editors, or complex configuration UIs. Ship the simple version first; complex customization can come later when actually needed. Confidence: 0.80
 - The WhatsApp AI receptionist is the top-of-funnel acquisition channel (audience attraction), while the patient portal and mobile app are the destination platforms where patients get a rich, full-featured experience. The strategic funnel is: WhatsApp attracts → Portal/App retains with rich features. Confidence: 0.80
 - New doctor-facing consultation capabilities should be per-doctor opt-in toggles (e.g., `canTelemedicine` + optional fee), not auto-enabled for all doctors — a clean opt-in model gives clinics control and avoids making new features an adoption barrier. Confidence: 0.6
+- The WhatsApp onboarding flow must be fully zero-config for the clinic admin — connect QR code and it instantly works. No manual webhook setup, no dashboard tweaks, no external service configuration. If the underlying API requires extra configuration (webhook URLs, event subscriptions), set them programmatically at instance creation time. The user considers any manual step in the WhatsApp connect flow a product failure. Confidence: 0.85
 
 # pricing
 See [pricing/taste.md](pricing/taste.md)
@@ -25,14 +25,10 @@ See [pricing/taste.md](pricing/taste.md)
 - Support both Evolution API (QR-based) and Meta Cloud API as WhatsApp connection methods so clinics can choose. Confidence: 0.75
 - Use app.clinicai.pk as the webhook domain for Evolution/Meta webhooks. Confidence: 0.85
 - In clinic-facing UI, use neutral labels (e.g., "QR Code", "Phone Number Pairing", "WhatsApp Link") instead of "Evolution API" to avoid exposing the internal tech stack. Make Meta Cloud API the default/recommended tab. Differentiate the methods factually: QR/pairing only enables basic message replies, while Meta Cloud API enables automation, campaigns, and full features. Keep ban risk messaging factual and measured — don't use alarmist/scary language that deters users from connecting at all. Confidence: 0.85
+- Phone number pairing code is the preferred WhatsApp connection method over QR code scanning — it works reliably regardless of which device the clinic admin uses (laptop or mobile), whereas scanning a QR code from the phone's Chrome browser is cumbersome and error-prone. The flow should be: admin types their WhatsApp number → receives a pairing code notification on their phone → enters the code → connected. Confidence: 0.85
 
 # mobile-dev
-- When building mobile app forms, cross-reference every field against the corresponding web app form AND the backend API schema before claiming completion. Missing fields (slotDurationMin, queueMode, workingHours for doctors) break functionality. Confidence: 0.75
-- Pin react and react-dom to exact version (no caret ^) in Expo SDK 56 projects — the bundled react-native-renderer requires an exact match, and ^19.2.3 resolves to 19.2.8 causing runtime crashes. Confidence: 0.70
-- When scaffolding a new sibling project (e.g., patient app alongside staff app), first audit existing sibling projects for reusable infrastructure — design system constants, theme providers, hooks, utilities, UI components, and assets. Copy these directly rather than rebuilding from scratch. Confidence: 0.75
-- Pin dependency versions in new sibling projects to match existing sibling projects (same Expo SDK, React, React Native, TypeScript versions) rather than using latest or default versions from the scaffolder. Confidence: 0.70
-- Use `npm install --legacy-peer-deps` (not plain `npm install`) for Expo projects — peer dependency mismatches are endemic in the Expo ecosystem and strict peer dep resolution causes install failures. Confidence: 0.65
-
+See [mobile-dev/taste.md](mobile-dev/taste.md)
 # i18n
 - Keep all UI in English for both mobile and web apps; only the WhatsApp AI agent should use Urdu. Do not add Urdu translations, localization, or language conversion to any app interfaces. Confidence: 0.85
 
@@ -62,10 +58,7 @@ See [pricing/taste.md](pricing/taste.md)
 # communication
 See [communication/taste.md](communication/taste.md)
 # mobile-dev
-- OTP delivery must use WhatsApp, not SMS (SMS costs are too high). Confidence: 0.75
-- Always apply proper rate limiting to OTP/auth endpoints. Confidence: 0.75
-- The patient-facing app must be a completely separate Expo project from the clinic staff app — do NOT add patient screens inside the existing clinicai-mobile app. Confidence: 0.80
-
+See [mobile-dev/taste.md](mobile-dev/taste.md)
 # project-structure
 - When creating new sibling projects (e.g., clinicai-patient), place them in `C:\Users\Thinkpad\Downloads/<project-name>/` rather than inside the main ClinicAi repo directory. The user accesses and tests mobile projects from their Downloads folder. Confidence: 0.70
 - The project has two separate Next.js apps — main dashboard (`src/`) and landing page (`clinicai-landing/`). When making cross-cutting UI changes (global pages like 404, shared components, error pages), apply them to BOTH apps, not just one. The user expects consistency across both apps. Confidence: 0.70
@@ -81,8 +74,8 @@ See [architecture/taste.md](architecture/taste.md)
 # dev-config
 - localhost:3000 serves clinicai.pk and localhost:8000 serves app.clinicai.pk, both accessed via tunnel. All three services (next, realtime, worker) must run together via `npm run dev`. Confidence: 0.85
 - Provide a working `dev.ps1` PowerShell script as the primary way to start all project services on Windows; the user prefers `.\dev.ps1` for quick startup. Confidence: 0.65
-- Use PowerShell (Invoke-WebRequest, Get-Content) for runtime debugging on Windows — reading .env files, testing external API connectivity, and inspecting runtime state of services. Confidence: 0.75
-. Confidence: 0.75
+- When a dependency version spec doesn't resolve (e.g., `~5.0.0` returns no matching version), use `npm view <pkg> versions --json` to discover actual available versions before guessing. Similarly, `npm view <pkg> version` gives the latest. This is faster than trial-and-error install attempts. Confidence: 0.65
+- When `package.json` is correct but `node_modules/` is missing expected packages (especially devDependencies like TypeScript), use `npm ls --depth=0` to audit what actually installed vs. what's declared. On Windows with `--legacy-peer-deps`, devDependencies are the most common silently-skipped category. Confidence: 0.65
 - When adding a new environment variable to `.env`, always also add it to `.env.example` with a placeholder value (not the real secret), so other developers and deployers can discover it. Confidence: 0.80
 
 # workflow
@@ -95,9 +88,10 @@ See [whatsapp-safety/taste.md](whatsapp-safety/taste.md)
 - For the clinic admin profile/settings page, provide two separate fields: a WhatsApp number field (with +92 prefix) and a separate calling/landline phone number field (no forced country code). Confidence: 0.75
 - The public booking link should only collect the PATIENT's WhatsApp number; do NOT add doctor or receptionist WhatsApp number fields to the public booking flow. Confidence: 0.80
 
+# tts-voice
+- Urdu TTS output must use actual Urdu script (اردو), never Roman Urdu — prefer TTS engines like Callrolin Humnava-v2 that natively pronounce Urdu script correctly rather than engines that require Roman Urdu workarounds. Confidence: 0.85
+- When writing Urdu text for TTS voice output, write in conversational/spoken style ("bolny waly andaz"), not formal/literary Urdu. The voice agent should sound natural and human, like a real receptionist speaking. Confidence: 0.80
+- Numbers in Urdu voice output must be written as Urdu words (e.g., "تین سو پچاس"), never as digits (350) — TTS engines mispronounce digits but pronounce Urdu number words correctly. This applies to fees, dates, times, phone numbers, and any other numeric content spoken by the AI agent. Confidence: 0.85
+
 # stt-provider
-- Soniox is the preferred STT provider for ClinicAI: cheapest ($0.12/hr), native Hinglish/code-switching support, and real-time transcription (sub-200ms). Confidence: 0.85
-- When evaluating STT providers, prioritize: Pakistani language support (Urdu, Punjabi, Pashto, Sindhi) > cost > real-time capability > Hinglish/mixed-language support. Confidence: 0.80
-- Assembly AI is already integrated and should be kept as a free-tier STT fallback alongside Soniox; use it when Soniox is unavailable or for Urdu-only cases where cost matters (Assembly AI gives free credits). Confidence: 0.85
-- Soniox is the primary STT provider; Whisper (OpenAI) serves as fallback for Pashto/Sindhi which Soniox does not support. Confidence: 0.85
-- Prefer managing STT provider configuration through the Platform Admin → LLM Keys UI (same pattern as LLM key management), not environment variables. Confidence: 0.80
+See [stt-provider/taste.md](stt-provider/taste.md)

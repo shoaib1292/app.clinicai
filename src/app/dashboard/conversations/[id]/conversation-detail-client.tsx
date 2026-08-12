@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Send, ArrowLeft, Hand, RotateCcw, Mic, CheckCheck, Zap, ChevronDown, ChevronUp } from 'lucide-react'
+import { Send, ArrowLeft, Hand, RotateCcw, Mic, CheckCheck, Zap, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { useRealtime } from '@/hooks/use-realtime'
 
 interface Message {
   id: string
@@ -66,7 +67,9 @@ export function ConversationDetailClient({ convo: initial }: { convo: Convo }) {
   const [loading, setLoading] = useState(false)
   const [showReplies, setShowReplies] = useState(true)
   const [customSnippets, setCustomSnippets] = useState<Array<{ id: string; label: string; body: string; category: string }>>([])
+  const [polling, setPolling] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const latestMsgTs = useRef<string>(initial.messages[initial.messages.length - 1]?.id || '')
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -81,6 +84,41 @@ export function ConversationDetailClient({ convo: initial }: { convo: Convo }) {
       })
       .catch(() => { /* silent */ })
   }, [])
+
+  // Poll for new messages every 3s as a reliable fallback
+  const fetchNewMessages = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/conversations/${convo.id}/messages`)
+      const json = await res.json()
+      if (json.ok && Array.isArray(json.data)) {
+        const serverMsgs = json.data as Message[]
+        const newestId = serverMsgs[serverMsgs.length - 1]?.id || ''
+        if (newestId !== latestMsgTs.current) {
+          latestMsgTs.current = newestId
+          setMessages(serverMsgs)
+        }
+      }
+    } catch { /* silent */ }
+  }, [convo.id])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPolling(true)
+      fetchNewMessages().finally(() => setPolling(false))
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [fetchNewMessages])
+
+  // Realtime Socket.io listener (complements polling for low-latency updates)
+  const { lastEvent } = useRealtime(`clinic:${initial.id}`)
+  useEffect(() => {
+    if (lastEvent?.message && typeof lastEvent.message === 'object') {
+      const msg = lastEvent.message as { type: string; conversationId: string }
+      if (msg.type === 'message_received' && msg.conversationId === convo.id) {
+        fetchNewMessages()
+      }
+    }
+  }, [lastEvent, convo.id, fetchNewMessages])
 
   async function takeover() {
     const res = await fetch(`/api/conversations/${convo.id}/takeover`, { method: 'POST' })

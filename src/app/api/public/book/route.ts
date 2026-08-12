@@ -4,6 +4,7 @@ import { hashPhone, last4 } from '@/lib/auth'
 import { computeFees } from '@/lib/schedule'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
+import { resolveBookingDiscount, applyDiscountToFees, recordRedemption } from '@/lib/discounts'
 
 // Public endpoint: POST /api/public/book
 // No auth — for shareable booking links. Creates appointment + patient.
@@ -15,11 +16,13 @@ interface BookBody {
   patientGender?: string
   serviceId?: string
   paymentMode?: string
+  promoCode?: string
+  refCode?: string
 }
 
 async function book(req: NextRequest) {
   const body = (await req.json()) as BookBody
-  const { doctorId, slotId, patientPhone, patientName, patientGender, serviceId, paymentMode } = body
+  const { doctorId, slotId, patientPhone, patientName, patientGender, serviceId, paymentMode, promoCode, refCode } = body
 
   if (!doctorId || !slotId || !patientPhone) return err('doctorId, slotId, patientPhone required', 400)
 
@@ -61,11 +64,21 @@ async function book(req: NextRequest) {
     if (!service) service = await db.service.findFirst({ where: { doctorId, clinicId } })
     if (!service) return err('No service configured for this doctor', 400)
 
+    // ── Resolve discount ──
+    const discount = await resolveBookingDiscount({
+      clinicId, promoCode, refCode,
+      patientId: patient.id, refereePhone: patientPhone,
+      serviceId: service.id, doctorId,
+    })
+    if (discount.error) return err(discount.error, 400)
+
     const clinicRule = await db.pricingRule.findFirst({ where: { clinicId } })
     const globalRule = await db.pricingRule.findFirst({ where: { scope: 'global' } })
     const platformFeeDefault = clinicRule?.platformFeeDefault ?? globalRule?.platformFeeDefault ?? 50
     const platformFeeOverride = clinicRule?.platformFeeOverride ?? null
-    const fees = computeFees({ doctorFee: service.baseFee, extraClinicFee: service.extraClinicFee, platformFeeDefault, platformFeeOverride })
+    const clinicMarkup = clinicRule?.markupDefault ?? globalRule?.markupDefault ?? 0
+    const fees = computeFees({ doctorFee: service.baseFee, clinicMarkup, platformFeeDefault, platformFeeOverride })
+    const discountedFees = applyDiscountToFees(fees, discount.discountAmount)
 
     await db.slot.update({ where: { id: slotId }, data: { status: 'booked', holdExpiresAt: null } })
 
@@ -78,23 +91,49 @@ async function book(req: NextRequest) {
       data: {
         clinicId, patientId: patient.id, doctorId, slotId, serviceId: service.id,
         start, end, status: 'booked', channel: 'link',
-        doctorFee: fees.doctorFee, extraClinicFee: fees.extraClinicFee, platformFee: fees.platformFee, totalFee: fees.total,
+        doctorFee: discountedFees.doctorFee, clinicMarkup: discountedFees.clinicMarkup,
+        platformFee: discountedFees.platformFee, totalFee: discountedFees.total,
         paymentStatus: 'pending', paymentMode: paymentMode || 'cash', createdVia: 'link',
       },
     })
 
     await db.appointmentFees.create({
       data: {
-        appointmentId: appt.id, baseDoctorFee: fees.doctorFee, extraClinicFee: fees.extraClinicFee,
-        platformFee: fees.platformFee, platformFeeOverride, total: fees.total, currency: 'PKR',
+        appointmentId: appt.id, baseDoctorFee: fees.doctorFee, clinicMarkup: fees.clinicMarkup,
+        platformFee: fees.platformFee, platformFeeOverride,
+        total: discountedFees.total, discount: discount.discountAmount, currency: 'PKR',
       },
     })
 
+    // ── Record redemption ──
+    if (discount.offerId) {
+      await recordRedemption({
+        clinicId, offerId: discount.offerId, appointmentId: appt.id,
+        patientId: patient.id, discountAmount: discount.discountAmount,
+        appliedBy: discount.appliedBy ?? 'promo',
+      })
+    }
+
+    // ── Record referral event ──
+    if (discount.referralCodeId && discount.referrerPatientId) {
+      await db.referralEvent.create({
+        data: {
+          clinicId, referralCodeId: discount.referralCodeId,
+          referrerPatientId: discount.referrerPatientId,
+          refereePhoneHash: phoneHash, refereePatientId: patient.id,
+          appointmentId: appt.id, status: 'booked',
+          discountApplied: discount.discountAmount,
+          rewardAmount: discount.refereeRewardAmount ?? 0,
+        },
+      })
+    }
+
     // Debit platform fee
+    const platformCharge = Math.max(0, discountedFees.platformFee - discount.discountAmount)
     const lastEntry = await db.creditLedger.findFirst({ where: { clinicId }, orderBy: { createdAt: 'desc' } })
-    const balanceAfter = (lastEntry?.balanceAfter ?? 0) - fees.platformFee
+    const balanceAfter = (lastEntry?.balanceAfter ?? 0) - platformCharge
     await db.creditLedger.create({
-      data: { clinicId, type: 'debit', amount: fees.platformFee, reason: 'appointment_fee', appointmentId: appt.id, balanceAfter },
+      data: { clinicId, type: 'debit', amount: platformCharge, reason: 'appointment_fee', appointmentId: appt.id, balanceAfter },
     })
     await db.clinic.update({ where: { id: clinicId }, data: { creditBalance: balanceAfter } })
 
@@ -117,7 +156,8 @@ async function book(req: NextRequest) {
       appointmentId: appt.id,
       patient: { id: patient.id, name: patient.name, phone: patient.phone },
       slot: { id: slot.id, startTime: slot.startTime, endTime: slot.endTime, tokenNo: slot.tokenNo },
-      fees,
+      fees: { ...discountedFees, discount: discount.discountAmount },
+      discount: { amount: discount.discountAmount, appliedBy: discount.appliedBy },
     })
   } finally {
     store.releaseLock(`slot:${slotId}`, lockToken)

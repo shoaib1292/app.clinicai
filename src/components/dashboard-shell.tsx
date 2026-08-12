@@ -13,7 +13,8 @@ import {
   Wallet, BarChart3, Bot, MessageSquare, Settings, LogOut, Menu, KeyRound,
   Receipt, CreditCard, UserCog, CalendarCheck, Activity, ShieldAlert,
   Bell, Search, ChevronDown, Moon, Sun,
-  Smartphone, ChevronRight, Sparkles, Send, Pill, PackageSearch, Truck, FileText, ShoppingCart, Mic, Monitor,
+  Smartphone, ChevronRight, Sparkles, Send, Pill, PackageSearch, Truck, FileText, ShoppingCart, Mic, Monitor, Radio,
+  FlaskConical, ClipboardList, Clock, ToggleLeft, Zap, Globe, Palette, Link as LinkIcon, Banknote, ArrowLeft,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -34,7 +35,7 @@ interface NavSection {
 }
 
 export interface DashboardShellProps {
-  userType: 'platform_admin' | 'platform_staff' | 'clinic_admin' | 'doctor' | 'receptionist'
+  userType: 'platform_admin' | 'platform_staff' | 'clinic_admin' | 'doctor' | 'receptionist' | 'pharmacist' | 'lab_admin' | 'accountant'
   userName: string
   clinicName?: string
   clinicLogoUrl?: string | null
@@ -43,6 +44,7 @@ export interface DashboardShellProps {
   enabledFeatures?: Set<string>
   immersive?: boolean
   onExitImmersive?: () => void
+  settingsSidebar?: boolean
 }
 
 function organizeNavSections(items: NavItem[], userType: string): NavSection[] {
@@ -56,12 +58,22 @@ function organizeNavSections(items: NavItem[], userType: string): NavSection[] {
   // Define section maps per role
   const sectionDefinitions: Record<string, { title: string; labels: string[] }[]> = {
     clinic_admin: [
-      { title: 'Clinic', labels: ['WhatsApp', 'Doctors', 'Receptionists', 'Services'] },
-      { title: 'Operations', labels: ['Appointments', 'Patients', 'Conversations', 'Agent Persona', 'Reminders'] },
-      { title: 'Marketing', labels: ['Website', 'Booking Links'] },
-      { title: 'Finance', labels: ['Bank Accounts', 'Billing & Wallet', 'Payments'] },
+      { title: 'Operations', labels: ['Patients', 'Appointments', 'Conversations', 'AI Agent'] },
+      { title: 'Growth', labels: ['Website', 'Offers & Referrals'] },
+      { title: 'Finance', labels: ['Payments', 'Credits'] },
+    ],
+    settings: [
+      { title: 'Clinic', labels: ['Clinic Profile', 'Doctors', 'Staff', 'Services', 'Working Hours', 'Toggles'] },
+      { title: 'Integrations', labels: ['WhatsApp', 'Google'] },
+      { title: 'Finance', labels: ['Bank Accounts'] },
+      { title: 'Marketing', labels: ['Booking Links', 'Templates', 'Quick Replies', 'Reminders', 'Branding'] },
       { title: 'Insights', labels: ['Analytics'] },
-      { title: 'Pharmacy', labels: ['Medicines', 'Inventory', 'Suppliers & Purchases', 'Prescriptions', 'Pharmacy Counter', 'Pharmacy Reports'] },
+    ],
+    pharmacist: [
+      { title: 'Pharmacy', labels: ['Pharmacy Counter', 'Medicines', 'Inventory', 'Prescriptions', 'Suppliers', 'Pharmacy Reports'] },
+    ],
+    lab_admin: [
+      { title: 'Lab', labels: ['Lab Orders', 'Lab Tests', 'Lab Reports', 'Patients'] },
     ],
   }
 
@@ -128,7 +140,7 @@ export const pharmacyNav: NavItem[] = [
   { label: 'Pharmacy Reports', href: '/dashboard/pharmacy/reports', icon: BarChart3 },
 ]
 
-export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, navItems, enabledFeatures, children, immersive, onExitImmersive }: DashboardShellProps) {
+export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, navItems, enabledFeatures, children, immersive, onExitImmersive, settingsSidebar }: DashboardShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -140,6 +152,7 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
   const [liveLogoUrl, setLiveLogoUrl] = useState<string | null | undefined>(clinicLogoUrl)
   const [resolvedFeatures, setResolvedFeatures] = useState<Set<string> | undefined>(enabledFeatures)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // If the page didn't pass enabledFeatures (most pages), resolve them
   // client-side for clinic-scoped roles so pharmacy tabs respect the toggle
@@ -179,13 +192,17 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
     return () => { cancelled = true }
   }, [enabledFeatures, userType])
 
+  // When in settings mode, override the nav to settings sidebar
+  const settingsActive = settingsSidebar || settingsOpen
+  const displayNav = settingsActive ? settingsNav : navItems
+
   // Filter pharmacy tabs by enabled features + append the Pharmacy section.
   const effectiveNav = useMemo(() => {
-    if (!resolvedFeatures) return navItems
-    const filtered = filterNavByFeatures(navItems, resolvedFeatures)
+    if (!resolvedFeatures) return displayNav
+    const filtered = filterNavByFeatures(displayNav, resolvedFeatures)
     const pharmacyItems = filterNavByFeatures(pharmacyNav, resolvedFeatures)
     return [...filtered, ...pharmacyItems]
-  }, [navItems, resolvedFeatures])
+  }, [displayNav, resolvedFeatures])
 
   // Reset collapsed state when mobile Sheet closes (return to desktop)
   useEffect(() => {
@@ -329,9 +346,14 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
     clinic_admin: 'Clinic Admin',
     doctor: 'Doctor',
     receptionist: 'Receptionist',
+    pharmacist: 'Pharmacist',
+    lab_admin: 'Lab Admin',
+    accountant: 'Accountant',
   }[userType]
 
-  const sections = organizeNavSections(effectiveNav, userType)
+  // Use 'settings' pseudo-type for section grouping when settings sidebar is active
+  const sectionUserType = settingsActive ? 'settings' : userType
+  const sections = organizeNavSections(effectiveNav, sectionUserType)
 
   // ─── Immersive mode: full-viewport editor, no chrome ───
   // The client component owns its own exit button in its top bar.
@@ -416,8 +438,8 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
       <nav className="flex-1 p-3 space-y-4 overflow-y-auto scroll-thin">
         {sections.map((section, si) => {
           const sectionKey = `section-${si}`
-          // Collapse sections by default in mobile Sheet
-          const defaultCollapsed = open
+          // Collapse sections by default in mobile Sheet — never collapse in settings
+          const defaultCollapsed = settingsActive ? false : open
           const isCollapsed = collapsedSections[sectionKey] ?? defaultCollapsed
           // Don't collapse sections with only 1 item
           const canCollapse = section.title && section.items.length > 1
@@ -471,13 +493,32 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
 
       {/* Footer */}
       <div className="p-3 border-t border-border/60 space-y-0.5">
-        <Link
-          href="/"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-surface-3 hover:text-foreground transition-colors"
-        >
-          <MessageSquare className="size-4 shrink-0 text-muted-foreground/60" />
-          Public site
-        </Link>
+        {settingsActive ? (
+          <>
+            <button
+              onClick={() => { setSettingsOpen(false); if (settingsSidebar) router.push('/dashboard/clinic') }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-surface-3 hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="size-4 shrink-0 text-muted-foreground/60" />
+              Back to main
+            </button>
+            <Link
+              href="/"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-surface-3 hover:text-foreground transition-colors"
+            >
+              <MessageSquare className="size-4 shrink-0 text-muted-foreground/60" />
+              Public site
+            </Link>
+          </>
+        ) : (
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-surface-3 hover:text-foreground transition-colors"
+          >
+            <Settings className="size-4 shrink-0 text-muted-foreground/60" />
+            Settings
+          </button>
+        )}
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -499,6 +540,12 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar with glass effect */}
         <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border/60 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 flex items-center px-4 lg:px-6 gap-2" style={{ paddingRight: 'calc(env(safe-area-inset-right, 0px) + 1rem)' }}>
+          {/* Settings back button */}
+          {settingsActive && (
+            <Button variant="ghost" size="sm" onClick={() => { setSettingsOpen(false); if (settingsSidebar) router.push('/dashboard/clinic') }} className="mr-1">
+              <ArrowLeft className="size-4 mr-1" /> Back
+            </Button>
+          )}
           {/* Mobile menu trigger */}
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -619,6 +666,7 @@ export const platformAdminNav: NavItem[] = [
   { label: 'Overview', href: '/dashboard/platform', icon: LayoutDashboard },
   { label: 'Clinics', href: '/dashboard/platform/clinics', icon: Building2 },
   { label: 'LLM Keys', href: '/dashboard/platform/llm-keys', icon: KeyRound },
+  { label: 'Evolution API', href: '/dashboard/platform/evolution-keys', icon: Radio },
   { label: 'Assembly AI', href: '/dashboard/platform/assembly-ai', icon: Mic },
   { label: 'Pricing Rules', href: '/dashboard/platform/pricing', icon: CreditCard },
   { label: 'Payment Accounts', href: '/dashboard/platform/accounts', icon: Wallet },
@@ -633,20 +681,56 @@ export const clinicAdminNav: NavItem[] = [
   { label: 'Overview', href: '/dashboard/clinic', icon: LayoutDashboard },
   { label: 'Appointments', href: '/dashboard/appointments', icon: CalendarDays },
   { label: 'Patients', href: '/dashboard/patients', icon: Users },
-  { label: 'Doctors', href: '/dashboard/clinic/doctors', icon: Stethoscope },
-  { label: 'Receptionists', href: '/dashboard/clinic/receptionists', icon: UserCog },
-  { label: 'Services', href: '/dashboard/clinic/services', icon: Activity },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageSquare },
-  { label: 'WhatsApp', href: '/dashboard/clinic/whatsapp', icon: Smartphone },
-  { label: 'Reminders', href: '/dashboard/reminders', icon: Bell },
+  { label: 'AI Agent', href: '/dashboard/agent-chat', icon: Bot },
   { label: 'Website', href: '/dashboard/clinic/website', icon: Monitor },
-  { label: 'Agent Persona', href: '/dashboard/clinic/agent', icon: Bot },
-  { label: 'Booking Links', href: '/dashboard/clinic/booking-links', icon: PhoneCall },
-  { label: 'Bank Accounts', href: '/dashboard/clinic/bank-accounts', icon: Wallet },
-  { label: 'Billing & Wallet', href: '/dashboard/billing', icon: Receipt },
+  { label: 'Offers & Referrals', href: '/dashboard/clinic/offers', icon: Sparkles },
   { label: 'Payments', href: '/dashboard/payments', icon: CreditCard },
-  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { label: 'Credits', href: '/dashboard/billing', icon: Wallet },
+]
+
+export const pharmacistNav: NavItem[] = [
+  { label: 'Overview', href: '/dashboard/pharmacist', icon: LayoutDashboard },
+  { label: 'Pharmacy Counter', href: '/dashboard/pharmacy/counter', icon: ShoppingCart },
+  { label: 'Medicines', href: '/dashboard/pharmacy/medicines', icon: Pill },
+  { label: 'Inventory', href: '/dashboard/pharmacy/inventory', icon: PackageSearch },
+  { label: 'Prescriptions', href: '/dashboard/pharmacy/prescriptions', icon: FileText },
+  { label: 'Suppliers', href: '/dashboard/pharmacy/suppliers', icon: Truck },
+  { label: 'Pharmacy Reports', href: '/dashboard/pharmacy/reports', icon: BarChart3 },
+]
+
+export const labAdminNav: NavItem[] = [
+  { label: 'Overview', href: '/dashboard/lab-admin', icon: LayoutDashboard },
+  { label: 'Lab Orders', href: '/dashboard/clinic/lab/orders', icon: ClipboardList },
+  { label: 'Lab Tests', href: '/dashboard/clinic/lab/tests', icon: FlaskConical },
+  { label: 'Lab Reports', href: '/dashboard/clinic/lab/reports', icon: FileText },
+  { label: 'Patients', href: '/dashboard/patients', icon: Users },
+]
+
+export const accountantNav: NavItem[] = [
+  { label: 'Overview', href: '/dashboard/accountant', icon: LayoutDashboard },
+  { label: 'Payments', href: '/dashboard/payments', icon: Wallet },
+  { label: 'Billing & Wallet', href: '/dashboard/billing', icon: Receipt },
+  { label: 'Bank Accounts', href: '/dashboard/clinic/bank-accounts', icon: Building2 },
+  { label: 'Offline Payments', href: '/dashboard/payments/offline', icon: Banknote },
+]
+
+export const settingsNav: NavItem[] = [
+  { label: 'Clinic Profile', href: '/dashboard/settings', icon: Building2 },
+  { label: 'Doctors', href: '/dashboard/settings/doctors', icon: Stethoscope },
+  { label: 'Staff', href: '/dashboard/settings/staff', icon: Users },
+  { label: 'Services', href: '/dashboard/settings/services', icon: Activity },
+  { label: 'WhatsApp', href: '/dashboard/settings/whatsapp', icon: Smartphone },
+  { label: 'Google', href: '/dashboard/settings/google', icon: Globe },
+  { label: 'Working Hours', href: '/dashboard/settings/hours', icon: Clock },
+  { label: 'Toggles', href: '/dashboard/settings/features', icon: ToggleLeft },
+  { label: 'Bank Accounts', href: '/dashboard/settings/bank-accounts', icon: Wallet },
+  { label: 'Booking Links', href: '/dashboard/settings/booking-links', icon: LinkIcon },
+  { label: 'Templates', href: '/dashboard/settings/templates', icon: MessageSquare },
+  { label: 'Quick Replies', href: '/dashboard/settings/quick-replies', icon: Zap },
+  { label: 'Reminders', href: '/dashboard/settings/reminders', icon: Bell },
+  { label: 'Analytics', href: '/dashboard/settings/analytics', icon: BarChart3 },
+  { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette },
 ]
 
 export const doctorNav: NavItem[] = [

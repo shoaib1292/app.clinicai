@@ -257,7 +257,7 @@ export async function processDelayedFollowups(): Promise<number> {
 /**
  * Send a WhatsApp message via the clinic's active channel.
  */
-async function sendWhatsAppMessage(clinicId: string, phone: string, message: string): Promise<boolean> {
+export async function sendWhatsAppMessage(clinicId: string, phone: string, message: string): Promise<boolean> {
   const { db } = await import('./db')
   const clinic = await db.clinic.findUnique({
     where: { id: clinicId },

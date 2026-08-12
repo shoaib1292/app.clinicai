@@ -42,8 +42,7 @@ interface BlockEditorProps {
   templateId: string
   headingFont?: string | null
   bodyFont?: string | null
-  onSave: (blocks: BlockItem[], content: Record<string, any>) => Promise<void>
-  onFontChange?: (headingFont: string, bodyFont: string) => void
+  onSave: (blocks: BlockItem[], content: Record<string, any>, headingFont?: string, bodyFont?: string) => Promise<void>
 }
 
 const FONT_OPTIONS = [
@@ -147,7 +146,7 @@ function SortableBlock({ block, onToggle, editingBlock, setEditingBlock, updateC
   )
 }
 
-export function BlockEditor({ clinicId, initialBlocks, initialContent, templateId, headingFont, bodyFont, onSave, onFontChange }: BlockEditorProps) {
+export function BlockEditor({ clinicId, initialBlocks, initialContent, templateId, headingFont, bodyFont, onSave }: BlockEditorProps) {
   const [blocks, setBlocks] = useState<BlockItem[]>(initialBlocks)
   const [content, setContent] = useState<Record<string, any>>(initialContent || {})
   const [saving, setSaving] = useState(false)
@@ -185,9 +184,7 @@ export function BlockEditor({ clinicId, initialBlocks, initialContent, templateI
   async function handleSave() {
     setSaving(true)
     try {
-      await onSave(blocks, content)
-      if (onFontChange) onFontChange(hdFont, bdFont)
-      toast.success('Changes saved!')
+      await onSave(blocks, content, hdFont, bdFont)
     } catch {
       toast.error('Failed to save')
     } finally {

@@ -4,11 +4,11 @@
  * Strict rate limits per phone to prevent abuse.
  */
 import { NextRequest } from 'next/server'
+import crypto from 'crypto'
 import { store } from '@/lib/store'
-import { hashPhone, randomToken } from '@/lib/auth'
+import { hashPhone } from '@/lib/auth'
 import { normalizePhone } from '@/lib/phone-utils'
-import { sendEvolutionMessage } from '@/lib/evolution'
-import { db } from '@/lib/db'
+import { queueSms } from '@/lib/sms-gateway'
 import { ok, err, handle } from '@/lib/api'
 
 // Rate limit keys per normalized phone
@@ -41,9 +41,8 @@ async function requestOTP(req: NextRequest) {
   const dayCount = (await store.get<number>(dayKey)) ?? 0
   if (dayCount >= 10) return err('Daily OTP limit reached. Please try again tomorrow.', 429)
 
-  // ── Generate OTP ──
-  // TEMP: Hardcoded OTP for testing — remove before production
-  const otp = '123456'
+  // ── Generate OTP (crypto-random 6-digit) ──
+  const otp = String(crypto.randomInt(100000, 999999))
   const otpKey = `otp:code:${phoneHash}`
 
   // ── Persist rate limits + OTP ──
@@ -54,23 +53,18 @@ async function requestOTP(req: NextRequest) {
     store.set(otpKey, otp, 300), // 5 min expiry
   ])
 
-  // ── Send OTP via WhatsApp Evolution ──
-  // Use ANY connected Evolution instance (platform-level sending)
-  const anyClinic = await db.clinic.findFirst({
-    where: { evolutionConnected: true, evolutionInstance: { not: null } },
-    select: { evolutionInstance: true },
-    orderBy: { createdAt: 'asc' },
-  })
+  // ── Send OTP via SMS Gateway ──
+  const smsResult = queueSms(phone, `Your ClinicAI verification code is: ${otp}`)
 
-  if (anyClinic?.evolutionInstance) {
-    await sendEvolutionMessage(anyClinic.evolutionInstance, phone, `Your ClinicAI verification code is: ${otp}`)
-    return ok({ sent: true, expiresIn: 300 })
+  if (!smsResult.ok) {
+    // SMS gateway offline — fallback: log for dev, still allow dev environments
+    console.log(`[patient:otp] SMS gateway offline. OTP for ${phoneHash.slice(0, 8)}: ${otp}`)
+    if (process.env.NODE_ENV === 'production') {
+      return err('SMS service unavailable. Please try again in a moment.', 503)
+    }
   }
 
-  // Fallback: if no Evolution instance is connected, still return OK
-  // (the OTP is stored; in dev/sandbox the code is shown in logs)
-  console.log(`[patient:otp] OTP for ${phoneHash.slice(0, 8)}: ${otp}`)
-  return ok({ sent: true, expiresIn: 300, note: 'WhatsApp delivery unavailable; OTP logged for dev' })
+  return ok({ sent: true, expiresIn: 300, smsId: smsResult.id })
 }
 
 export const POST = handle(requestOTP)

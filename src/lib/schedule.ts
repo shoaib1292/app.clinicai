@@ -2,7 +2,7 @@ import { db } from './db'
 
 // Generate slots for a doctor on a given date based on their schedule + overrides.
 // queue_mode determines token assignment.
-export async function generateSlotsForDoctorDate(doctorId: string, date: Date) {
+export async function generateSlotsForDoctorDate(doctorId: string, date: Date, _durationOverride?: number) {
   const doctor = await db.doctor.findUnique({
     where: { id: doctorId },
     include: { schedules: true, scheduleOverrides: true },
@@ -10,7 +10,7 @@ export async function generateSlotsForDoctorDate(doctorId: string, date: Date) {
   if (!doctor) return []
 
   const dayOfWeek = date.getDay() // 0=Sun
-  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const dateOnly = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
 
   // Check for leave/block override (full day)
   const dayOverride = doctor.scheduleOverrides.find(
@@ -109,15 +109,15 @@ export function fromMin(min: number): string {
 
 export function sameDay(a: Date, b: Date): boolean {
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate()
   )
 }
 
 // List available slots for a doctor on a date (excluding booked/held/blocked)
 export async function listAvailableSlots(doctorId: string, date: Date) {
-  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const dateOnly = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
   await generateSlotsForDoctorDate(doctorId, date)
   const slots = await db.slot.findMany({
     where: {
@@ -136,15 +136,16 @@ export async function listAvailableSlots(doctorId: string, date: Date) {
 // Pricing: compute fees for an appointment
 export function computeFees(params: {
   doctorFee: number
-  extraClinicFee: number
+  clinicMarkup?: number
   platformFeeDefault?: number
   platformFeeOverride?: number | null
 }) {
   const platformFee = params.platformFeeOverride ?? params.platformFeeDefault ?? 50
-  const total = params.doctorFee + params.extraClinicFee + platformFee
+  const markup = params.clinicMarkup ?? 0
+  const total = params.doctorFee + markup + platformFee
   return {
     doctorFee: params.doctorFee,
-    extraClinicFee: params.extraClinicFee,
+    clinicMarkup: markup,
     platformFee,
     total,
   }
@@ -157,4 +158,42 @@ export function computeRefund(appointmentStart: Date, platformFee: number): numb
   if (diffHours > 4) return platformFee
   if (diffHours > 2) return Math.floor(platformFee * 0.5)
   return 0
+}
+
+/** Resolve appointment duration from a service (or doctor default). */
+export async function resolveDuration(clinicId: string, doctorId: string, serviceId?: string): Promise<number | undefined> {
+  if (serviceId) {
+    const svc = await db.service.findFirst({ where: { id: serviceId, clinicId } })
+    if (svc) return svc.durationMin
+  }
+  const doc = await db.doctor.findUnique({ where: { id: doctorId } })
+  return doc?.slotDurationMin
+}
+
+/** Check if a slot falls within a leave or blocked time range. */
+export async function findBlockingOverride(params: {
+  doctorId: string
+  slotDate: Date
+  startTime: string
+  endTime: string
+}): Promise<{ type: string } | null> {
+  const dayStart = new Date(Date.UTC(params.slotDate.getFullYear(), params.slotDate.getMonth(), params.slotDate.getDate()))
+  const overrides = await db.scheduleOverride.findMany({
+    where: {
+      doctorId: params.doctorId,
+      date: dayStart,
+      type: { in: ['leave', 'block'] },
+    },
+  })
+  for (const o of overrides) {
+    if (o.type === 'leave') return { type: 'leave' }
+    if (o.startTime && o.endTime) {
+      const slotMin = toMin(params.startTime)
+      const slotEndMin = toMin(params.endTime)
+      const blockMin = toMin(o.startTime)
+      const blockEndMin = toMin(o.endTime)
+      if (slotMin < blockEndMin && slotEndMin > blockMin) return { type: 'block' }
+    }
+  }
+  return null
 }

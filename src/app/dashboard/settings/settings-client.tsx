@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Loader2, Save, Building2, ToggleLeft, Keyboard, CalendarClock, Palette } from 'lucide-react'
+import { Loader2, Save, Building2, ToggleLeft, Keyboard, CalendarClock, Palette, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { ClinicProfileTab, type SettingsForm } from './components/clinic-profile-tab'
 import { FeaturesToggleTab } from './components/features-toggle-tab'
 import { KeyboardShortcutsTab } from './components/keyboard-shortcuts-tab'
 import { WorkingHoursTab } from './components/schedule-editor'
 import { ClinicBrandingTab } from './components/clinic-branding-tab'
+import { GoogleIntegrationTab } from './components/google-integration-tab'
 
 interface Clinic {
   id: string
@@ -29,6 +30,7 @@ interface Clinic {
 const SETTINGS_TABS = [
   { value: 'clinic-profile', label: 'Clinic Profile', icon: Building2, description: 'Logo, basic info, and regional settings.' },
   { value: 'branding', label: 'Branding & Info', icon: Palette, description: 'Colors, fonts, doctor branding, agent persona, and stats.' },
+  { value: 'google-integration', label: 'Google Integration', icon: Globe, description: 'Calendar sync, Meet, Gmail, Drive, and more.', clinicAdminOnly: true },
   { value: 'features-toggle', label: 'Features Toggle', icon: ToggleLeft, description: 'Turn agent and payments features on or off.' },
   { value: 'working-hours', label: 'Working Hours', icon: CalendarClock, description: 'Clinic-wide default availability and breaks.' },
   { value: 'keyboard-shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard, description: 'Speed up your workflow with hotkeys.' },
@@ -115,6 +117,7 @@ export function SettingsClient({ clinic, userType, subFeatures, brandingData }: 
       <Tabs defaultValue="clinic-profile" className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
         <TabsList className="h-fit flex-col items-stretch gap-1 bg-transparent p-0 md:sticky md:top-6 self-start">
           {SETTINGS_TABS.map((tab) => {
+            if (tab.clinicAdminOnly && userType !== 'clinic_admin') return null
             const Icon = tab.icon
             return (
               <TabsTrigger
@@ -154,6 +157,14 @@ export function SettingsClient({ clinic, userType, subFeatures, brandingData }: 
               <ClinicBrandingTab clinicId={clinic.id} initialData={brandingData} doctors={brandingData.doctors || []} />
             ) : (
               <p className="text-sm text-muted-foreground">Branding settings are available to clinic admins only.</p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="google-integration">
+            {clinic ? (
+              <GoogleIntegrationTab clinicId={clinic.id} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Google integration is available to clinic admins only.</p>
             )}
           </TabsContent>
 

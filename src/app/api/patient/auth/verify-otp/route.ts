@@ -31,26 +31,23 @@ async function verifyOTP(req: NextRequest) {
     return err('Too many failed attempts. Please try again after 30 minutes.', 429)
   }
 
-  // TEMP BYPASS: WhatsApp OTP not yet functional — accept any 6-digit code
-  // TODO: Restore OTP verification when WhatsApp integration is live
   // ── Get stored OTP ──
-  // const otpKey = `otp:code:${phoneHash}`
-  // const storedOtp = await store.get<string>(otpKey)
+  const otpKey = `otp:code:${phoneHash}`
+  const storedOtp = await store.get<string>(otpKey)
 
-  // if (!storedOtp || storedOtp !== otp) {
-  //   // Increment fail counter + block if needed
-  //   const newFails = failCount + 1
-  //   const ttl = newFails >= MAX_VERIFY_ATTEMPTS ? VERIFY_BLOCK_SEC : 300
-  //   await store.set(failKey, newFails, ttl)
-  //   return err('Invalid OTP', 401)
-  // }
+  if (!storedOtp || storedOtp !== otp) {
+    // Increment fail counter
+    const newFails = failCount + 1
+    const ttl = newFails >= MAX_VERIFY_ATTEMPTS ? VERIFY_BLOCK_SEC : 300
+    await store.set(failKey, newFails, ttl)
+    return err('Invalid OTP', 401)
+  }
 
-  // // ── OTP correct — consume (single-use) ──
-  // await Promise.all([
-  //   store.del(otpKey),
-  //   store.del(failKey), // clear fail counter on success
-  // ])
-  await store.del(failKey)
+  // ── OTP correct — consume (single-use) ──
+  await Promise.all([
+    store.del(otpKey),
+    store.del(failKey), // clear fail counter on success
+  ])
 
   // ── Upsert PatientAppUser ──
   let appUser = await db.patientAppUser.findUnique({ where: { phoneHash } })

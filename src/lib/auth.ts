@@ -1,6 +1,11 @@
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { authenticator } from 'otplib'
+import { NextRequest } from 'next/server'
+
+export function cookieSecure(req: NextRequest): boolean {
+  return req.headers.get('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production'
+}
 
 // AES-256-GCM encryption for secrets at rest (LLM keys, Meta tokens, bank accounts)
 const ENC_KEY = process.env.APP_ENCRYPTION_KEY
@@ -121,11 +126,12 @@ const REFRESH_TTL = Number(process.env.JWT_REFRESH_TTL) || 604800 // 7 days
 
 export interface SessionPayload {
   sub: string         // user id
-  type: string        // platform_admin | platform_staff | clinic_admin | doctor | receptionist
+  type: string        // platform_admin | platform_staff | clinic_admin | doctor | receptionist | patient
   role?: string       // sub-role (sales/onboarding/support/finance for platform_staff)
   clinicId?: string
   email: string
   name: string
+  phoneHash?: string  // patient identity
   twoFactorVerified?: boolean  // true if 2FA challenge passed this session
   iat: number
   exp: number

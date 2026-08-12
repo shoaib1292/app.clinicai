@@ -26,7 +26,10 @@ async function available(req: NextRequest) {
   const slots = await db.slot.findMany({
     where: {
       doctorId,
-      date: new Date(Date.UTC(y, m - 1, d)),
+      date: {
+        gte: new Date(Date.UTC(y, m - 1, d)),
+        lt: new Date(Date.UTC(y, m - 1, d + 1)),
+      },
       status: 'open',
     },
     orderBy: { startTime: 'asc' },

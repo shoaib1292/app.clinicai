@@ -12,8 +12,8 @@ interface BrandingConfig {
 }
 
 const BrandingContext = createContext<BrandingConfig>({
-  primaryColor: '#0891b2',
-  secondaryColor: '#06b6d4',
+  primaryColor: '#111111',
+  secondaryColor: '#333333',
   clinicName: 'Clinic',
   logoUrl: null,
   headingFont: null,
@@ -43,8 +43,8 @@ export function BrandingProvider({
     () => {
       // Website builder brand color wins; portal-specific color is fallback.
       // This keeps the portal visually identical to the clinic's website.
-      const primaryColor = clinic.brandColor || clinic.brandingPrimaryColor || '#0891b2'
-      const secondaryColor = clinic.brandingSecondaryColor || clinic.brandColor || '#06b6d4'
+      const primaryColor = clinic.brandColor || clinic.brandingPrimaryColor || '#111111'
+      const secondaryColor = clinic.brandingSecondaryColor || clinic.brandColor || '#333333'
       return {
         primaryColor,
         secondaryColor,

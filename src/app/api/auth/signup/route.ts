@@ -14,6 +14,7 @@ interface SignupBody {
   whatsappNumber: string
   city: string
   password: string
+  provider?: string
 }
 
 function slugify(text: string): string {
@@ -26,12 +27,14 @@ function slugify(text: string): string {
 
 async function signup(req: NextRequest) {
   const body = (await req.json()) as SignupBody
-  const { clinicName, adminName, adminEmail, whatsappNumber, city, password } = body
+  const { clinicName, adminName, adminEmail, whatsappNumber, city, password, provider } = body
 
-  if (!clinicName || !adminName || !adminEmail || !whatsappNumber || !city || !password) {
+  const isGoogle = provider === 'google'
+
+  if (!clinicName || !adminName || !adminEmail || !whatsappNumber || !city) {
     return err('All fields are required', 400)
   }
-  if (password.length < 8) {
+  if (!isGoogle && password.length < 8) {
     return err('Password must be at least 8 characters', 400)
   }
 
@@ -61,7 +64,7 @@ async function signup(req: NextRequest) {
     suffix++
   }
 
-  const passwordHash = await hashPassword(password)
+  const passwordHash = isGoogle ? '' : await hashPassword(password)
   const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
 
   // Create everything in a transaction
@@ -92,6 +95,7 @@ async function signup(req: NextRequest) {
         passwordHash,
         phone: waNumber,
         active: true,
+        emailVerified: isGoogle ? new Date() : null,
       },
     })
 
@@ -142,41 +146,52 @@ async function signup(req: NextRequest) {
     console.error('[signup] Verification email failed:', e)
   }
 
-  // Auto-login
-  const token = signSession({
-    sub: result.adminId,
-    type: 'clinic_admin',
-    clinicId: result.clinicId,
-    email,
-    name: result.name,
-    twoFactorVerified: false,
-  })
-  const { token: refreshToken } = signRefreshToken(result.adminId)
+  // Auto-login — only for Google signups (email already verified). Password signups
+  // must verify their email first; they'll be redirected to a verification screen.
+  if (isGoogle) {
+    const token = signSession({
+      sub: result.adminId,
+      type: 'clinic_admin',
+      clinicId: result.clinicId,
+      email,
+      name: result.name,
+      twoFactorVerified: false,
+    })
+    const { token: refreshToken } = signRefreshToken(result.adminId)
 
-  const res = ok({
+    const res = ok({
+      clinicId: result.clinicId,
+      adminId: result.adminId,
+      name: result.name,
+      credits: 1000,
+      redirectTo: `/signup/success?clinicId=${result.clinicId}`,
+      session: token,
+      refresh: refreshToken,
+    })
+    res.cookies.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: cookieSecure(req),
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 8,
+    })
+    res.cookies.set(REFRESH_COOKIE, refreshToken, {
+      httpOnly: true,
+      secure: cookieSecure(req),
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 604800,
+    })
+    return res
+  }
+
+  return ok({
     clinicId: result.clinicId,
     adminId: result.adminId,
     name: result.name,
     credits: 1000,
-    redirectTo: `/signup/success?clinicId=${result.clinicId}`,
-    session: token,
-    refresh: refreshToken,
+    redirectTo: `/signup/verify?email=${encodeURIComponent(email)}`,
   })
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: cookieSecure(req),
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 8,
-  })
-  res.cookies.set(REFRESH_COOKIE, refreshToken, {
-    httpOnly: true,
-    secure: cookieSecure(req),
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 604800,
-  })
-  return res
 }
 
 export const POST = handle(signup)

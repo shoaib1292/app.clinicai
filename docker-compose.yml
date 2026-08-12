@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # --- Next.js App ---
   app:
@@ -14,7 +12,7 @@ services:
       - NODE_ENV=production
       - STORE_TYPE=redis
       - PORT=3000
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
     depends_on:
       postgres:
@@ -47,7 +45,7 @@ services:
       - NODE_ENV=production
       - STORE_TYPE=redis
       - PORT=3000
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:${DB_PORT}/${DB_NAME}
     depends_on:
       postgres:
@@ -62,7 +60,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${DB_PORT}:${DB_PORT}"
+      - "127.0.0.1:${DB_PORT}:5432"
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -85,12 +83,13 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     command: >
-      redis-server --requirepass ${REDIS_PASSWORD}
-        --appendonly yes
-        --appendfsync everysec
-        --save 300 1
-        --maxmemory 2gb
-        --maxmemory-policy allkeys-lru
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --save 300 1
+      --save 60 1000
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     healthcheck:
@@ -98,6 +97,96 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - clinicai
+
+  # --- LiveKit (Self-hosted Telemedicine) ---
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    command: --config /etc/livekit.yaml --node-ip=127.0.0.1
+    networks:
+      - clinicai
+
+  # --- Penpot (Open-source Design Tool) ---
+  penpot-frontend:
+    image: penpotapp/frontend:latest
+    restart: unless-stopped
+    ports:
+      - "9001:8080"
+    volumes:
+      - penpot_assets:/opt/data/assets
+    depends_on:
+      - penpot-backend
+    networks:
+      - clinicai
+    environment:
+      PENPOT_FLAGS: enable-registration enable-login-with-password
+      PENPOT_PUBLIC_URI: http://localhost:9001
+
+  penpot-backend:
+    image: penpotapp/backend:latest
+    restart: unless-stopped
+    volumes:
+      - penpot_assets:/opt/data/assets
+    depends_on:
+      penpot-postgres:
+        condition: service_healthy
+      penpot-redis:
+        condition: service_started
+    networks:
+      - clinicai
+    environment:
+      PENPOT_FLAGS: enable-registration enable-login-with-password
+      PENPOT_PUBLIC_URI: http://localhost:9001
+      PENPOT_SECRET_KEY: super-secret-change-me-in-production-use-64-random-chars
+      PENPOT_DATABASE_URI: postgresql://penpot-postgres/penpot
+      PENPOT_DATABASE_USERNAME: penpot
+      PENPOT_DATABASE_PASSWORD: penpot
+      PENPOT_REDIS_URI: redis://penpot-redis/0
+      PENPOT_ASSETS_STORAGE_BACKEND: assets-fs
+      PENPOT_STORAGE_ASSETS_FS_DIRECTORY: /opt/data/assets
+      PENPOT_TELEMETRY_ENABLED: "false"
+
+  penpot-exporter:
+    image: penpotapp/exporter:latest
+    restart: unless-stopped
+    depends_on:
+      penpot-redis:
+        condition: service_started
+    networks:
+      - clinicai
+    environment:
+      PENPOT_SECRET_KEY: super-secret-change-me-in-production-use-64-random-chars
+      PENPOT_PUBLIC_URI: http://localhost:9001
+      PENPOT_REDIS_URI: redis://penpot-redis/0
+
+  penpot-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    stop_signal: SIGINT
+    environment:
+      POSTGRES_DB: penpot
+      POSTGRES_USER: penpot
+      POSTGRES_PASSWORD: penpot
+    volumes:
+      - penpot_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penpot"]
+      interval: 2s
+      timeout: 10s
+      retries: 5
+    networks:
+      - clinicai
+
+  penpot-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
     networks:
       - clinicai
 
@@ -126,6 +215,8 @@ volumes:
   redis_data:
   caddy_data:
   caddy_config:
+  penpot_postgres:
+  penpot_assets:
 
 networks:
   clinicai:

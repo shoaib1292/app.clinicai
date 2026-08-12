@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireType } from '@/lib/session'
-import { createEvolutionInstance, connectEvolutionWithCode, getEvolutionQR, saveWhatsAppConnection } from '@/lib/evolution'
+import { createEvolutionInstance, connectEvolutionWithCode, getEvolutionQR, saveWhatsAppConnection, friendlyEvoError } from '@/lib/evolution'
 import { ok, err, handle } from '@/lib/api'
 
 async function create(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +21,7 @@ async function create(req: NextRequest, { params }: { params: Promise<{ id: stri
   const result = await createEvolutionInstance(id, instanceName, { mode, phoneNumber: phone })
 
   if (result.error) {
-    return err(result.error, 500)
+    return err(friendlyEvoError(result.error), 500)
   }
 
   // For code mode, initiate connection to get the pairing code
@@ -29,7 +29,7 @@ async function create(req: NextRequest, { params }: { params: Promise<{ id: stri
   if (mode === 'code' && phone) {
     const codeResult = await connectEvolutionWithCode(instanceName, phone)
     if (codeResult.error) {
-      return err(codeResult.error, 502)
+      return err(friendlyEvoError(codeResult.error), 502)
     }
     pairingCode = codeResult.pairingCode
   }

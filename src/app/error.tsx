@@ -11,7 +11,7 @@ export default function RootError({ error, reset }: { error: Error & { digest?: 
   }, [error])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-50 to-cyan-50 dark:from-slate-950 dark:to-slate-900 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 px-4">
       <AlertCircle className="h-12 w-12 text-red-500" />
       <h1 className="text-xl font-semibold">Something went wrong</h1>
       <p className="max-w-md text-center text-sm text-muted-foreground">

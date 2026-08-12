@@ -1,23 +1,24 @@
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { PublicBookingClient } from './public-booking-client'
+import { verifyBookingToken } from '@/lib/booking-token'
 
 export const metadata = { title: 'Book Appointment — ClinicAI' }
 
-export default async function PublicBookingPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicBookingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ ref?: string }>
+}) {
   const { token } = await params
+  const { ref: refCode } = await searchParams
 
-  // Decode token: base64(clinicId:doctorId:serviceId)
-  let clinicId = '', doctorId = '', serviceId = ''
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8')
-    const parts = decoded.split(':')
-    clinicId = parts[0] || ''
-    doctorId = parts[1] || ''
-    serviceId = parts[2] || ''
-  } catch {
-    notFound()
-  }
+  // Verify JWT booking token or fallback to legacy base64
+  const decoded = verifyBookingToken(token)
+  if (!decoded) notFound()
+  const { clinicId, doctorId, serviceId } = { clinicId: decoded.clinicId, doctorId: decoded.doctorId ?? '', serviceId: decoded.serviceId ?? '' }
 
   const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
   if (!clinic) notFound()
@@ -39,5 +40,5 @@ export default async function PublicBookingPage({ params }: { params: Promise<{ 
     },
   })
 
-  return <PublicBookingClient clinic={clinic} doctors={doctors} services={services} preselectedDoctorId={doctorId} preselectedServiceId={serviceId} />
+  return <PublicBookingClient clinic={clinic} doctors={doctors} services={services} preselectedDoctorId={doctorId} preselectedServiceId={serviceId} initialRefCode={refCode || undefined} />
 }

@@ -129,7 +129,7 @@ export async function runOrchestrator(opts: {
   let langInstruction: string
   if (replyLang === 'urdu') {
     const modalityHint = inputModality === 'voice'
-      ? 'Use ROMAN URDU (English script, Urdu words) for correct audio pronunciation.'
+      ? `Use URDU SCRIPT (اردو) for voice replies — the TTS engine pronounces it natively. Numbers MUST be written in Urdu words, NOT digits. Example: "آپ کی فیس تین سو پچاس روپے ہے" not "آپ کی فیس 350 روپے ہے". Write "تین سو پچاس" not "350".`
       : 'Reply in URDU SCRIPT (اردو) for proper display. Not Roman Urdu.'
     langInstruction = `\n\nIMPORTANT: Patient language is "${detectedLang}". ${modalityHint}`
   } else {

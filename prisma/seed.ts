@@ -244,6 +244,7 @@ async function main() {
         email: `admin@${clinic.slug}.pk`,
         name: `${clinic.name.split(' ')[0]} Admin`,
         passwordHash: pw,
+        emailVerified: new Date(),
         clinicId: clinic.id,
         phone: `+9230012345${idx}${idx}`,
       },

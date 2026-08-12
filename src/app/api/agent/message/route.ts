@@ -4,7 +4,20 @@ import { requireClinicScope, requireType } from '@/lib/session'
 import { runAgent } from '@/lib/agent'
 import { hashPhone } from '@/lib/auth'
 import { store } from '@/lib/store'
+import { sendEvolutionMessage, sendEvolutionVoice } from '@/lib/evolution'
 import { ok, err, handle } from '@/lib/api'
+
+const REALTIME_PORT = process.env.REALTIME_PORT || '3003'
+
+async function broadcastToRealtime(channel: string, message: unknown): Promise<void> {
+  try {
+    await fetch(`http://localhost:${REALTIME_PORT}/broadcast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, message }),
+    })
+  } catch { /* silent */ }
+}
 
 interface Body {
   message: string
@@ -78,6 +91,7 @@ async function sendMessage(req: NextRequest) {
     await db.message.create({
       data: { conversationId, direction: 'in', type: inboundType, body: inboundBody },
     })
+    void broadcastToRealtime(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'in', body: inboundBody })
     store.publish(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'in', body: inboundBody })
   }
 
@@ -106,7 +120,21 @@ async function sendMessage(req: NextRequest) {
       where: { id: conversationId },
       data: { updatedAt: new Date(), lastIntent: result.toolCalls[0]?.name || 'chat' },
     })
+    void broadcastToRealtime(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'out', body: result.reply })
     store.publish(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'out', body: result.reply })
+  }
+
+  // Deliver to WhatsApp via Evolution API
+  const evoConn = await db.whatsAppConnection.findFirst({
+    where: { clinicId, mode: 'evo', status: 'connected' },
+    select: { evoInstanceName: true },
+  })
+  if (evoConn?.evoInstanceName && patientPhone) {
+    if (result.modality === 'voice' && result.voiceReplyBase64) {
+      await sendEvolutionVoice(evoConn.evoInstanceName, patientPhone, result.voiceReplyBase64, 'wav')
+    } else {
+      await sendEvolutionMessage(evoConn.evoInstanceName, patientPhone, result.reply)
+    }
   }
 
   return ok({

@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClinicScope, requireType, auditLog } from '@/lib/session'
-import { hashPassword } from '@/lib/auth'
+import { hashPassword, randomToken } from '@/lib/auth'
 import { ok, err, handle } from '@/lib/api'
+import { sendStaffInvite, getClinicNameForUser } from '@/lib/staff-invite'
 
 // GET /api/receptionists  — clinic-scoped list (clinic_admin only)
 async function list(_req: NextRequest) {
@@ -22,10 +23,11 @@ async function create(req: NextRequest) {
   if (session.type !== 'clinic_admin') return err('Forbidden', 403)
 
   const body = await req.json().catch(() => ({}))
-  const { name, email, password, phone } = body as {
+  const { name, email, password: rawPassword, phone } = body as {
     name?: string; email?: string; password?: string; phone?: string
   }
-  if (!name || !email || !password) return err('name, email, password required', 400)
+  const password = rawPassword || randomToken(12)
+  if (!name || !email) return err('name, email required', 400)
 
   const emailLower = email.toLowerCase().trim()
   const existing = await db.receptionist.findUnique({ where: { email: emailLower } })
@@ -52,6 +54,12 @@ async function create(req: NextRequest) {
     metadata: { name, email: emailLower },
     ip: req.headers.get('x-forwarded-for') || '127.0.0.1',
   })
+
+  // Send invitation email with password-setup link (7-day expiry)
+  if (!rawPassword) {
+    const clinicName = await getClinicNameForUser('receptionist', clinicId)
+    await sendStaffInvite({ id: receptionist.id, name: receptionist.name, email: receptionist.email, userType: 'receptionist' }, clinicName)
+  }
 
   return ok({ id: receptionist.id, name: receptionist.name, email: receptionist.email, phone: receptionist.phone, active: receptionist.active })
 }

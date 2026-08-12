@@ -3,7 +3,7 @@ import { store } from '../store'
 import { hashPhone, decrypt, last4, randomToken } from '../auth'
 import { encryptPhone } from '../phone-encryption'
 import { decryptPhone } from '../phone-encryption'
-import { computeFees, generateSlotsForDoctorDate, resolveDuration, computeRefund, findBlockingOverride } from '../schedule'
+import { computeFees, generateSlotsForDoctorDate, computeRefund, resolveDuration, findBlockingOverride } from '../schedule'
 import { publishAppointmentBooked } from '../automation-publisher'
 import type { AgentContext } from './types'
 

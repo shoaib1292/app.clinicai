@@ -83,6 +83,7 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [previewKey, setPreviewKey] = useState(0)
   const [editMode, setEditMode] = useState(false)
@@ -93,7 +94,7 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
   // State
   const [customDomain, setCustomDomain] = useState('')
   const [verifying, setVerifying] = useState(false)
-  const [brandColor, setBrandColor] = useState('#0891b2')
+  const [brandColor, setBrandColor] = useState('#111111')
   const [tagline, setTagline] = useState('')
   const [description, setDescription] = useState('')
   const [headingFont, setHeadingFont] = useState('Inter')
@@ -114,7 +115,7 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
         const d = json.data
         setWebsite(d)
         setCustomDomain(d.customDomain || '')
-        setBrandColor(d.brandColor || '#0891b2')
+        setBrandColor(d.brandColor || '#111111')
         setTagline(d.tagline || '')
         setDescription(d.description || '')
         setHeadingFont(d.headingFont || 'Inter')
@@ -127,6 +128,8 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
   }
 
   async function save(updates: Record<string, any>) {
+    if (savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     try {
       const res = await fetch(`/api/clinics/${clinicId}/website`, {
@@ -145,7 +148,10 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
       }
     } catch {
       toast.error('Failed to save settings')
-    } finally { setSaving(false) }
+    } finally {
+      setSaving(false)
+      savingRef.current = false
+    }
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -248,7 +254,7 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
     })
   })()
 
-  async function handleBlockEditorSave(blocks: Array<{ id: string; label: string; visible: boolean; order: number; content?: Record<string, any> }>, _content: Record<string, any>) {
+  async function handleBlockEditorSave(blocks: Array<{ id: string; label: string; visible: boolean; order: number; content?: Record<string, any> }>, _content: Record<string, any>, hdFont?: string, bdFont?: string) {
     // Merge editor changes into existing blocksConfig so non-editor blocks
     // (footer, faq, etc. added by the AI wizard) are preserved.
     const existing = website?.blocksConfig || []
@@ -278,7 +284,12 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
     // Reindex orders across the merged set.
     const merged = [...editorConfig, ...preserved].map((b, i) => ({ ...b, order: i }))
 
-    await save({ blocksConfig: merged })
+    // Merge fonts into a single API call
+    const updates: Record<string, any> = { blocksConfig: merged }
+    if (hdFont !== undefined) updates.headingFont = hdFont
+    if (bdFont !== undefined) updates.bodyFont = bdFont
+
+    await save(updates)
   }
 
   // ─── IMMERSIVE MODE: GHL-style full-page editor ───
@@ -386,7 +397,6 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
                 headingFont={headingFont}
                 bodyFont={bodyFont}
                 onSave={handleBlockEditorSave}
-                onFontChange={(h, b) => save({ headingFont: h, bodyFont: b })}
               />
             </div>
           )}
@@ -592,7 +602,6 @@ export function WebsiteBuilderClient({ clinicId, immersive, onEnterImmersive, on
               headingFont={headingFont}
               bodyFont={bodyFont}
               onSave={handleBlockEditorSave}
-              onFontChange={(h, b) => save({ headingFont: h, bodyFont: b })}
             />
           </TabsContent>
         </Tabs>

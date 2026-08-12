@@ -244,7 +244,7 @@ W-INF "prisma migrate deploy..."
 node node_modules/prisma/build/index.js migrate deploy 2>&1 | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) {
   W-WRN "migrate deploy failed, trying db push..."
-  node node_modules/prisma/build/index.js db push 2>&1 | ForEach-Object { Write-Host $_ }
+  node node_modules/prisma/build/index.js db push --accept-data-loss 2>&1 | ForEach-Object { Write-Host $_ }
 }
 W-OK "Prisma done!"
 
@@ -305,7 +305,7 @@ Write-Host ""
 W-WRN "Press Ctrl+C to stop all services"
 Write-Host ""
 
-node node_modules/concurrently/dist/bin/index.js `
+concurrently `
   --kill-others-on-fail `
   --prefix-colors "cyan,green,yellow,blue" `
   -n "next,realtime,worker,landing" `

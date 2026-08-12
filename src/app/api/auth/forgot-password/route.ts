@@ -26,15 +26,18 @@ async function forgotPassword(req: NextRequest) {
   if (!email) return err('Email is required', 400)
 
   // Search across all user types
-  const [admin, staff, cadmin, rec, doc] = await Promise.all([
+  const [admin, staff, cadmin, rec, doc, pharm, lab, acct] = await Promise.all([
     db.platformAdmin.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
     db.platformStaff.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
     db.clinicAdmin.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
     db.receptionist.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
     db.doctor.findFirst({ where: { email }, select: { id: true, name: true, email: true } }),
+    db.pharmacist.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
+    db.labAdmin.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
+    db.accountant.findUnique({ where: { email }, select: { id: true, name: true, email: true } }),
   ])
 
-  const user = admin || staff || cadmin || rec || doc
+  const user = admin || staff || cadmin || rec || doc || pharm || lab || acct
   if (!user) {
     // Don't reveal whether the email exists — security best practice
     return ok({ message: 'If an account with that email exists, a reset link has been sent.' })
@@ -47,6 +50,9 @@ async function forgotPassword(req: NextRequest) {
   else if (cadmin) userType = 'clinic_admin'
   else if (rec) userType = 'receptionist'
   else if (doc) userType = 'doctor'
+  else if (pharm) userType = 'pharmacist'
+  else if (lab) userType = 'lab_admin'
+  else if (acct) userType = 'accountant'
 
   // Generate reset token
   const token = randomToken(24)

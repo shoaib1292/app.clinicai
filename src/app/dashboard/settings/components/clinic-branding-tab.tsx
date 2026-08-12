@@ -193,7 +193,7 @@ export function ClinicBrandingTab({ clinicId, initialData, doctors }: BrandingTa
                 <code className="text-sm">{brandColor}</code>
               </div>
               <div className="flex gap-2">
-                {['#111111', '#0891b2', '#059669', '#7c3aed', '#dc2626', '#d97706', '#2563eb', '#db2777'].map(c => (
+                {['#111111', '#333333', '#666666', '#059669', '#7c3aed', '#dc2626', '#d97706', '#2563eb', '#db2777'].map(c => (
                   <button key={c} onClick={() => setBrandColor(c)}
                     className="h-8 w-8 rounded-full border-2 transition-all hover:scale-110"
                     style={{ backgroundColor: c, borderColor: brandColor === c ? brandColor : 'transparent' }} />

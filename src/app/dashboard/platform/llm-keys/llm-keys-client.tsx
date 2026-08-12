@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { KeyRound, Plus, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { KeyRound, Plus, Loader2, CheckCircle2, XCircle, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface KeyRow {
@@ -21,7 +21,7 @@ interface KeyRow {
   enabled: boolean
   lastError: string | null
   lastUsedAt: Date | null
-  _count: { callLogs: number }
+  callCount?: number
   createdAt: Date
 }
 
@@ -62,6 +62,19 @@ export function LlmKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
     if (fresh.ok) setKeys(fresh.data)
   }
 
+  async function deleteKey(id: string, alias: string) {
+    if (!confirm(`Delete "${alias}"? This cannot be undone.`)) return
+    setLoading(true)
+    const res = await fetch(`/api/llm-keys?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    const json = await res.json()
+    setLoading(false)
+    if (!json.ok) {
+      toast.error(json.error || 'Failed to delete')
+      return
+    }
+    toast.success(`Deleted "${alias}"`)
+    setKeys((prev) => prev.filter((k) => k.id !== id))
+  }
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -133,7 +146,7 @@ export function LlmKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
                     {k.alias}
                     {k.enabled ? <CheckCircle2 className="w-3.5 h-3.5 text-chart-2" /> : <XCircle className="w-3.5 h-3.5 text-destructive" />}
                   </div>
-                  <div className="text-xs text-muted-foreground">{k.provider} · {k.encryptedKey} · {k._count.callLogs} calls</div>
+                  <div className="text-xs text-muted-foreground">{k.provider} · {k.encryptedKey} · {k.callCount ?? 0} calls</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -141,6 +154,9 @@ export function LlmKeysClient({ initialKeys }: { initialKeys: KeyRow[] }) {
                 <Badge variant="outline">${k.dailyBudgetUsd}/day</Badge>
                 {k.lastError && <Badge variant="destructive" className="text-xs">Error</Badge>}
                 {k.lastUsedAt && <Badge variant="secondary" className="text-xs">Last: {new Date(k.lastUsedAt).toLocaleString('en-PK')}</Badge>}
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteKey(k.id, k.alias)} disabled={loading}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -22,10 +22,19 @@ async function list(req: NextRequest, { params }: { params: Promise<{ id: string
     ? new Date(dateStr + 'T00:00:00.000Z')
     : new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z')
 
-  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
+  const endOfDay = dateStr
+    ? new Date(dateStr + 'T00:00:00.000Z')
+    : new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z')
+  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1)
 
   // Auto-generate slots on demand so patients always see up-to-date availability
-  await generateSlotsForDoctorDate(doctorId, startOfDay)
+  if (dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    await generateSlotsForDoctorDate(doctorId, new Date(Date.UTC(y, m - 1, d)))
+  } else {
+    const today = new Date()
+    await generateSlotsForDoctorDate(doctorId, new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())))
+  }
 
   const slots = await db.slot.findMany({
     where: {

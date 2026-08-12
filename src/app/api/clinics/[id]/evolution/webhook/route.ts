@@ -1,12 +1,12 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
-import { requireScope, auditLog } from '@/lib/session'
+import { requireType, auditLog } from '@/lib/session'
 import { ok, err, handle } from '@/lib/api'
 import { updateEvolutionWebhook } from '@/lib/evolution'
 
-async function update(req: NextRequest) {
-  const session = await requireScope('clinic:update')
-  const { id } = await req.params
+async function update(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireType('platform_admin')
+  const { id } = await params
   const body = await req.json()
   const { webhookUrl } = body
 

@@ -6,6 +6,93 @@
  * In sandbox, these are no-ops (log only). In production, configure via .env.
  */
 import crypto from 'crypto'
+import { resolveEmailProvider } from '@/lib/providers/registry'
+
+// ── Email Templates ──────────────────────────────────────────────────────────
+
+export function templateEmailVerify({ name, verifyUrl }: { name: string; verifyUrl: string }): { subject: string; html: string } {
+  const subject = 'Verify your ClinicAI email'
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 40px 0; margin: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden;">
+    <tr><td style="padding: 32px 32px 8px; text-align: center;">
+      <img src="https://app.clinicai.pk/logo-light.png" alt="ClinicAI" style="height: 36px;">
+    </td></tr>
+    <tr><td style="padding: 24px 32px 8px; font-size: 20px; font-weight: 600; color: #111;">Verify your email</td></tr>
+    <tr><td style="padding: 8px 32px 24px; font-size: 14px; color: #555; line-height: 1.6;">
+      Hi ${name},<br><br>
+      Thanks for signing up for ClinicAI. Click the button below to verify your email address and activate your account.
+    </td></tr>
+    <tr><td style="padding: 0 32px 32px; text-align: center;">
+      <a href="${verifyUrl}" style="display: inline-block; background: #111; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 600;">Verify Email</a>
+    </td></tr>
+    <tr><td style="padding: 0 32px 32px; font-size: 12px; color: #999;">
+      If the button doesn't work, copy and paste this link:<br>
+      <a href="${verifyUrl}" style="color: #555; word-break: break-all;">${verifyUrl}</a>
+    </td></tr>
+  </table>
+</body>
+</html>`
+  return { subject, html }
+}
+
+export function templatePasswordReset({ name, resetUrl }: { name?: string; resetUrl: string }): { subject: string; html: string } {
+  const subject = 'Reset your ClinicAI password'
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 40px 0; margin: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden;">
+    <tr><td style="padding: 32px 32px 8px; text-align: center;">
+      <img src="https://app.clinicai.pk/logo-light.png" alt="ClinicAI" style="height: 36px;">
+    </td></tr>
+    <tr><td style="padding: 24px 32px 8px; font-size: 20px; font-weight: 600; color: #111;">Reset your password</td></tr>
+    <tr><td style="padding: 8px 32px 24px; font-size: 14px; color: #555; line-height: 1.6;">
+      ${name ? `Hi ${name},<br><br>` : ''}We received a request to reset your ClinicAI password. Click the button below to choose a new one.
+    </td></tr>
+    <tr><td style="padding: 0 32px 32px; text-align: center;">
+      <a href="${resetUrl}" style="display: inline-block; background: #111; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 600;">Reset Password</a>
+    </td></tr>
+    <tr><td style="padding: 0 32px 32px; font-size: 12px; color: #999;">
+      If the button doesn't work, copy and paste this link:<br>
+      <a href="${resetUrl}" style="color: #555; word-break: break-all;">${resetUrl}</a>
+    </td></tr>
+  </table>
+</body>
+</html>`
+  return { subject, html }
+}
+
+export function templateStaffInvite({ name, clinicName, setupUrl }: { name: string; clinicName: string; setupUrl: string }): { subject: string; html: string } {
+  const subject = `You've been added to ${clinicName} on ClinicAI`
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 40px 0; margin: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden;">
+    <tr><td style="padding: 32px 32px 8px; text-align: center;">
+      <img src="https://app.clinicai.pk/logo-light.png" alt="ClinicAI" style="height: 36px;">
+    </td></tr>
+    <tr><td style="padding: 24px 32px 8px; font-size: 20px; font-weight: 600; color: #111;">Welcome to ClinicAI 👋</td></tr>
+    <tr><td style="padding: 8px 32px 24px; font-size: 14px; color: #555; line-height: 1.6;">
+      Hi ${name},<br><br>
+      <strong>${clinicName}</strong> has added you as a team member on ClinicAI. Set up your password below to get started.
+    </td></tr>
+    <tr><td style="padding: 0 32px 32px; text-align: center;">
+      <a href="${setupUrl}" style="display: inline-block; background: #111; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 600;">Set Up Your Password</a>
+    </td></tr>
+    <tr><td style="padding: 0 32px 32px; font-size: 12px; color: #999;">
+      This invitation link expires in 7 days.<br>
+      If the button doesn't work, copy and paste this link:<br>
+      <a href="${setupUrl}" style="color: #555; word-break: break-all;">${setupUrl}</a>
+    </td></tr>
+  </table>
+</body>
+</html>`
+  return { subject, html }
+}
 
 // ── SMS (Twilio) ────────────────────────────────────────────────────────────
 
@@ -14,10 +101,6 @@ const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || ''
 const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || ''
 const SMS_PROVIDER = process.env.SMS_PROVIDER || 'none'
 
-/**
- * Send an SMS message via Twilio.
- * Used as fallback when WhatsApp is unavailable (founder doc §31).
- */
 export async function sendSMS(to: string, body: string): Promise<{ ok: boolean; messageId?: string; error?: string }> {
   if (SMS_PROVIDER === 'none' || !TWILIO_ACCOUNT_SID) {
     console.log(`[sms:sandbox] → ${to}: ${body.slice(0, 80)}...`)
@@ -49,45 +132,30 @@ export async function sendSMS(to: string, body: string): Promise<{ ok: boolean; 
   }
 }
 
-// ── Email (SMTP via nodemailer) ─────────────────────────────────────────────
+// ── Email (Provider-based: Google Gmail → SMTP/Brevo fallback) ──────────────
 
-const SMTP_HOST = process.env.SMTP_HOST || ''
-const SMTP_PORT = Number(process.env.SMTP_PORT) || 587
-const SMTP_USER = process.env.SMTP_USER || ''
-const SMTP_PASSWORD = process.env.SMTP_PASSWORD || ''
-const SMTP_FROM = process.env.SMTP_FROM || 'ClinicAI <noreply@clinicsai.pk>'
-
-/**
- * Send an email. Uses nodemailer in production, logs in sandbox.
- * Staff-only: payment proofs, daily summaries, alerts (founder doc §31).
- */
-export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<{ ok: boolean; messageId?: string; error?: string }> {
-  if (!SMTP_HOST) {
-    console.log(`[email:sandbox] → ${to}: ${subject}`)
-    return { ok: true, messageId: `sandbox_${crypto.randomUUID()}` }
-  }
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text?: string,
+  opts?: { category?: string; clinicId?: string },
+): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+  const clinicId = opts?.clinicId
+  const { provider, type } = await resolveEmailProvider(clinicId)
 
   try {
-    // Dynamic import to avoid loading nodemailer in sandbox
-    const nodemailer = await import('nodemailer')
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
-    })
-
-    const info = await transporter.sendMail({
-      from: SMTP_FROM,
-      to,
-      subject,
-      text: text || html.replace(/<[^>]*>/g, ''),
-      html,
-    })
-
-    return { ok: true, messageId: info.messageId }
+    return await provider.sendEmail({ to, subject, html, text })
   } catch (err) {
-    console.error('[email] Error:', err)
+    console.error(`[email:${type}] Error:`, err)
+
+    // If Gmail fails and we have SMTP configured, try SMTP fallback
+    if (type === 'google' && process.env.SMTP_HOST) {
+      console.log('[email] Gmail failed, falling back to SMTP')
+      const { SmtpProvider } = await import('@/lib/providers/email/smtp')
+      return new SmtpProvider().sendEmail({ to, subject, html, text })
+    }
+
     return { ok: false, error: String(err) }
   }
 }
@@ -118,13 +186,13 @@ export async function sendNotification(opts: NotificationOpts): Promise<{ whatsa
     // Email to staff
     if (opts.staffEmails && opts.staffEmails.length > 0) {
       for (const email of opts.staffEmails) {
-        const r = await sendEmail(email, opts.subject || 'ClinicAI Notification', opts.body)
+        const r = await sendEmail(email, opts.subject || 'ClinicAI Notification', opts.body, undefined, { clinicId: opts.clinicId })
         results.email = r.ok
       }
     }
-    // Email to patient (rare — only if explicitly provided)
+    // Email to patient
     if (opts.patientEmail) {
-      const r = await sendEmail(opts.patientEmail, opts.subject || 'ClinicAI Notification', opts.body)
+      const r = await sendEmail(opts.patientEmail, opts.subject || 'ClinicAI Notification', opts.body, undefined, { clinicId: opts.clinicId })
       results.email = r.ok
     }
   }

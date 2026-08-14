@@ -31,8 +31,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid 1001 --no-create-home --shell /bin/sh nextjs
 
 # Copy standalone build output
 COPY --from=builder /app/.next/standalone ./

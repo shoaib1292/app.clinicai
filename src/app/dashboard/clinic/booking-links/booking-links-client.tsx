@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 
 interface Clinic { id: string; name: string; slug: string }
 interface Doctor { id: string; name: string; speciality: string }
-interface Service { id: string; name: string; baseFee: number; extraClinicFee: number; doctor: { name: string } | null }
+interface Service { id: string; name: string; baseFee: number; durationMin: number; doctor: { name: string } | null }
 
 export function BookingLinksClient({ clinic, doctors, services }: { clinic: Clinic; doctors: Doctor[]; services: Service[] }) {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('')
@@ -70,7 +70,7 @@ export function BookingLinksClient({ clinic, doctors, services }: { clinic: Clin
                 <SelectTrigger><SelectValue placeholder="Any service" /></SelectTrigger>
                 <SelectContent>
                   {services.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name} — PKR {s.baseFee + s.extraClinicFee + 50}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.name} — PKR {s.baseFee + 50}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

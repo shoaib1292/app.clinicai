@@ -16,7 +16,6 @@ async function list(req: NextRequest) {
   const schedules = await db.schedule.findMany({
     where: { doctorId },
     orderBy: { dayOfWeek: 'asc' },
-    include: { _count: { select: { scheduleOverrides: true } } },
   })
   return ok(schedules)
 }

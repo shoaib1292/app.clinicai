@@ -136,7 +136,8 @@ async function processWebhookJob(job: { data: WebhookJob }) {
       if (!guard.ok) {
         console.warn(`[webhook-worker] Skipping Evolution reply for clinic ${data.clinicId} / ${patientPhone}: ${guard.reason}`)
       } else if (result.modality === 'voice' && result.voiceReplyBase64) {
-        await sendEvolutionVoice(data.instanceName, patientPhone, result.voiceReplyBase64, (result as { voiceReplyFormat?: string }).voiceReplyFormat || 'wav')
+        const fmt = (result as { voiceReplyFormat?: string }).voiceReplyFormat
+        await sendEvolutionVoice(data.instanceName, patientPhone, result.voiceReplyBase64, (fmt === 'mp3' || fmt === 'ogg') ? fmt : 'wav')
       } else {
         await sendEvolutionMessage(data.instanceName, patientPhone, result.reply, {
           typingMs: pacing.typingMs,
@@ -144,7 +145,8 @@ async function processWebhookJob(job: { data: WebhookJob }) {
       }
     } else if (data.channel === 'meta' && data.phoneNumberId && data.accessToken) {
       if (result.modality === 'voice' && result.voiceReplyBase64) {
-        await sendMetaAudio(data.phoneNumberId, data.accessToken, patientPhone, result.voiceReplyBase64, (result as { voiceReplyFormat?: string }).voiceReplyFormat || 'wav')
+        const fmt = (result as { voiceReplyFormat?: string }).voiceReplyFormat
+        await sendMetaAudio(data.phoneNumberId, data.accessToken, patientPhone, result.voiceReplyBase64, (fmt === 'mp3' || fmt === 'ogg') ? fmt : 'wav')
       } else {
         await sendMetaMessage(data.phoneNumberId, data.accessToken, patientPhone, result.reply)
       }
@@ -165,16 +167,15 @@ export async function registerProductionWorker(connection: import('bullmq').Conn
 // Called from src/cron/index.ts periodically
 export async function processWebhookQueue(): Promise<number> {
   let processed = 0
-  const job = await store.dequeue<WebhookJob>(QUEUE_NAME)
+  let job = await store.dequeue(QUEUE_NAME)
   while (job) {
     try {
-      await processWebhookJob({ data: job })
+      await processWebhookJob({ data: job.data as WebhookJob })
       processed++
     } catch (err) {
       console.error('[webhook-worker] sandbox job failed:', err)
     }
-    const next = await store.dequeue<WebhookJob>(QUEUE_NAME)
-    if (!next) break
+    job = await store.dequeue(QUEUE_NAME)
   }
   return processed
 }

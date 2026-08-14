@@ -100,7 +100,11 @@ async function sendCampaign(job: { data: { campaignId: string } }) {
       }
 
       if (!messageSent && campaign.clinic.metaConnected) {
-        const metaToken = campaign.clinic.metaTokenEnc ? decryptMetaToken(campaign.clinic.metaTokenEnc) : ''
+        const metaConn = await db.whatsAppConnection.findFirst({
+          where: { clinicId: campaign.clinicId, mode: 'meta', status: 'connected' },
+          select: { metaTokenEnc: true },
+        })
+        const metaToken = metaConn?.metaTokenEnc ? decryptMetaToken(metaConn.metaTokenEnc) : ''
         const metaPhoneId = campaign.clinic.metaPhoneId
         if (metaToken && metaPhoneId) {
           const res = await sendMetaMessage(metaPhoneId, metaToken, decryptPhone(patient.phone), personalizedBody)
@@ -137,7 +141,7 @@ async function sendCampaign(job: { data: { campaignId: string } }) {
     data: {
       sentCount: sent,
       failedCount: failed,
-      status: sent > 0 ? 'completed' : 'failed',
+      status: sent > 0 ? 'completed' : 'cancelled',
     },
   })
 

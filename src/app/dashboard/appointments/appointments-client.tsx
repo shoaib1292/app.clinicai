@@ -26,14 +26,14 @@ interface Appt {
   paymentMode: string
   totalFee: number
   doctorFee: number
-  extraClinicFee: number
+  clinicMarkup: number
   platformFee: number
   checkInTime: Date | null
   notes: string | null
   patient: { id: string; name: string | null; phone: string; gender: string; totalVisits: number; noShowCount: number }
   doctor: { id: string; name: string; speciality: string }
   service: { name: string } | null
-  fees: { baseDoctorFee: number; extraClinicFee: number; platformFee: number; total: number } | null
+  fees: { baseDoctorFee: number; clinicMarkup: number; platformFee: number; total: number } | null
   slot: { tokenNo: number | null } | null
 }
 
@@ -357,7 +357,7 @@ export function AppointmentsClient({ appointments, doctors, userType }: { appoin
                                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Fees</div>
                                 <div className="rounded-md border divide-y text-sm">
                                   <Row label="Doctor fee" value={`PKR ${a.doctorFee}`} />
-                                  <Row label="Extra clinic fee" value={`PKR ${a.extraClinicFee}`} />
+                                  <Row label="Clinic markup" value={`PKR ${a.clinicMarkup}`} />
                                   <Row label="Platform fee" value={`PKR ${a.platformFee}`} />
                                   <Row label="Total" value={`PKR ${a.totalFee}`} strong />
                                   <Row label="Payment" value={`${a.paymentMode} · ${a.paymentStatus}`} />

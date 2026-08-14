@@ -40,7 +40,7 @@ export function AccountantDashboard({ clinicName, stats }: Props) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                <AnimatedCounter from={0} to={stats.creditBalance} duration={800} />
+                <AnimatedCounter value={stats.creditBalance} />
                 <span className="text-sm ml-1 font-normal text-muted-foreground">PKR</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Available clinic credits</p>

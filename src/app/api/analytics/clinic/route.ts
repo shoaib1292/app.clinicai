@@ -27,7 +27,7 @@ async function clinicAnalytics(_req: NextRequest) {
   // Revenue: completed appointments' totalFee
   const feeAgg = await db.appointment.aggregate({
     where: { clinicId, status: 'completed' },
-    _sum: { totalFee: true, doctorFee: true, extraClinicFee: true, platformFee: true },
+    _sum: { totalFee: true, doctorFee: true, clinicMarkup: true, platformFee: true },
   })
 
   // Platform fee debited from credit ledger
@@ -97,7 +97,7 @@ async function clinicAnalytics(_req: NextRequest) {
       creditBalance: clinic?.creditBalance ?? 0,
       totalRevenue: feeAgg._sum.totalFee ?? 0,
       totalDoctorFee: feeAgg._sum.doctorFee ?? 0,
-      totalExtraClinicFee: feeAgg._sum.extraClinicFee ?? 0,
+      totalExtraClinicFee: feeAgg._sum.clinicMarkup ?? 0,
       totalPlatformFee: ledgerDebits._sum.amount ?? 0,
       totalTopups: ledgerCredits._sum.amount ?? 0,
     },

@@ -332,7 +332,6 @@ export async function runOrchestrator(opts: {
           .replace(/\bClinic\s*AI\b/gi, clinic.agentName || clinic.name)
       }
       // Verify any booking the agent claims to have made against the database.
-      const { db } = await import('../db')
       const validationResult = await validateAgentResponse(
         finalReply,
         toolCallLog.map((tc) => ({ name: tc.name, result: tc.result as Record<string, unknown> })),

@@ -24,15 +24,16 @@ async function recordPayment(req: NextRequest) {
   const paymentProof = await db.paymentProof.create({
     data: {
       clinicId,
-      patientId,
       amount,
       status: 'confirmed',
       ledgerType: appointmentId ? 'patient_payment' : 'clinic_topup',
-      paymentMode: paymentMode || 'cash',
+      payerName: 'Walk-in patient',
+      screenshotUrl: `/uploads/offline-${Date.now()}.png`,
+      uploadedBy: 'receptionist',
       notes: `Offline payment${notes ? ': ' + notes : ''}${referenceNumber ? ' (Ref: ' + referenceNumber + ')' : ''}`,
       appointmentId: appointmentId || null,
       confirmedAt: new Date(date || new Date()),
-      reviewedById: session.sub,
+      confirmedBy: session.sub,
     },
   })
 

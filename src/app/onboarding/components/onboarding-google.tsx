@@ -37,7 +37,7 @@ export function OnboardingGoogle({ data, onChange, clinicId }: Props) {
       <Card className="bg-muted/20">
         <CardContent className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            {GoogleIcon}
+            <GoogleIcon />
             <div>
               <div className="font-bold text-lg">Google Integration</div>
               <div className="text-sm text-muted-foreground">Connect your Google account to unlock powerful features</div>
@@ -54,7 +54,7 @@ export function OnboardingGoogle({ data, onChange, clinicId }: Props) {
           </div>
 
           <Button onClick={connect} variant="outline" className="w-full">
-            {GoogleIcon}
+            <GoogleIcon />
             <span className="ml-2">Connect Google Account</span>
           </Button>
 

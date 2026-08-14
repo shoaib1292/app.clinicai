@@ -70,12 +70,14 @@ async function forgotPassword(req: NextRequest) {
   }
 
   // Send email with reset link
-  try {
-    const tpl = templatePasswordReset({ name: user.name || undefined, resetUrl })
-    await sendEmail(user.email, tpl.subject, tpl.html, `Reset your ClinicAI password: ${resetUrl}`)
-  } catch (e) {
-    console.error('[forgot-password] Email send failed:', e)
-    // Don't reveal email failure to user
+  if (user.email) {
+    try {
+      const tpl = templatePasswordReset({ name: user.name || undefined, resetUrl })
+      await sendEmail(user.email, tpl.subject, tpl.html, `Reset your ClinicAI password: ${resetUrl}`)
+    } catch (e) {
+      console.error('[forgot-password] Email send failed:', e)
+      // Don't reveal email failure to user
+    }
   }
 
   return ok({ message: 'If an account with that email exists, a reset link has been sent.' })

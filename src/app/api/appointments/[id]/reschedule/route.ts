@@ -129,15 +129,15 @@ async function reschedule(req: NextRequest, { params }: { params: Promise<{ id: 
       clinicId,
       action: 'appointment_rescheduled',
       target: id,
-      metadata: JSON.stringify({
-        oldStart: appt.start,
-        newStart,
+      metadata: {
+        oldStart: appt.start.toISOString(),
+        newStart: newStart.toISOString(),
         oldDoctorId: appt.doctorId,
         newDoctorId,
         oldSlotId: appt.slotId,
         newSlotId: body.newSlotId,
         reason: body.reason || null,
-      }),
+      },
     })
 
     return ok({

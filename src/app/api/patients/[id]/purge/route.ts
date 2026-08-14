@@ -74,11 +74,11 @@ async function purgePatient(_req: NextRequest, { params }: { params: Promise<{ i
     clinicId: session.clinicId,
     action: 'patient_data_purged',
     target: id,
-    metadata: JSON.stringify({
+    metadata: {
       patientPhoneLast4: patient.phoneLast4,
       reason: 'right_to_be_forgotten',
       purgedAt: new Date().toISOString(),
-    }),
+    },
   })
 
   return ok({

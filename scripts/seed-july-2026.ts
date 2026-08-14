@@ -5,7 +5,7 @@
  *
  * Run: bun run scripts/seed-july-2026.ts
  */
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type AppointmentStatus } from '@prisma/client'
 import { hashPhone } from '../src/lib/auth'
 import { generateSlotsForDoctorDate } from '../src/lib/schedule'
 
@@ -150,7 +150,7 @@ async function main() {
 
     // Create 20 patients per clinic
     console.log('  👥 Creating 20 patients...')
-    const patients = []
+    const patients: Awaited<ReturnType<typeof db.patient.create>>[] = []
     const startIdx = clinics.indexOf(clinic) * 20
     for (let i = 0; i < 20; i++) {
       const person = PAKISTANI_NAMES[(startIdx + i) % PAKISTANI_NAMES.length]
@@ -210,7 +210,7 @@ async function main() {
         const end = new Date(start.getTime() + duration * 60 * 1000)
 
         const doctorFee = service?.baseFee || 800
-        const extraFee = service?.clinicMarkup || 100
+        const extraFee = 100
         const platformFee = 50
         const totalFee = doctorFee + extraFee + platformFee
 
@@ -223,7 +223,7 @@ async function main() {
             serviceId: service?.id || null,
             start,
             end,
-            status: statusItem.status as string,
+            status: statusItem.status as AppointmentStatus,
             channel: channelItem.channel,
             createdVia: channelItem.channel === 'whatsapp' ? 'agent' : channelItem.channel === 'link' ? 'public' : 'receptionist',
             doctorFee,

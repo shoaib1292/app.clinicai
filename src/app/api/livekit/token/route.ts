@@ -36,7 +36,7 @@ async function getToken(req: NextRequest) {
   // since the room name itself is the access credential
 
   // Generate token
-  const token = generateJoinToken({
+  const token = await generateJoinToken({
     roomName,
     identity,
     name: name || identity,

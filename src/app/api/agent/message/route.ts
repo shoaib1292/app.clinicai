@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireClinicScope, requireType } from '@/lib/session'
 import { runAgent } from '@/lib/agent'
 import { hashPhone } from '@/lib/auth'
+import { encryptPhone } from '@/lib/phone-encryption'
 import { store } from '@/lib/store'
 import { sendEvolutionMessage, sendEvolutionVoice } from '@/lib/evolution'
 import { ok, err, handle } from '@/lib/api'
@@ -70,7 +71,7 @@ async function sendMessage(req: NextRequest) {
     if (!patient) {
       patient = await db.patient.create({
         data: {
-          clinicId, phoneHash, phoneLast4: patientPhone.slice(-4), phone: patientPhone,
+          clinicId, phoneHash, phoneLast4: patientPhone.slice(-4), phone: encryptPhone(patientPhone),
           name: patientName, gender: 'unknown', preferredLanguage: 'urdu', preferredModality: 'auto',
         },
       })

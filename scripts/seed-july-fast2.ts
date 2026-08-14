@@ -86,7 +86,7 @@ async function main() {
       const duration = doctor.slotDurationMin || 15
       const svc = doctor.services[0]
       const doctorFee = svc?.baseFee || 800
-      const extraFee = svc?.clinicMarkup || 100
+      const extraFee = 100
       const platformFee = 50
 
       for (let day = 1; day <= 26; day++) {

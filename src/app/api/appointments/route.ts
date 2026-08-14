@@ -1,7 +1,9 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import type { AppointmentStatus, Gender } from '@prisma/client'
 import { requireClinicScope, requireType, auditLog } from '@/lib/session'
 import { hashPhone, last4 } from '@/lib/auth'
+import { encryptPhone, decryptPhone } from '@/lib/phone-encryption'
 import { computeFees, computeRefund } from '@/lib/schedule'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
@@ -37,7 +39,7 @@ async function list(req: NextRequest) {
     where: {
       clinicId,
       AND: [
-        status ? { status } : {},
+        status ? { status: status as AppointmentStatus } : {},
         from ? { start: { gte: new Date(from) } } : {},
         to ? { end: { lte: new Date(to) } } : {},
         doctorId ? { doctorId } : {},
@@ -52,7 +54,7 @@ async function list(req: NextRequest) {
       fees: true,
     },
   })
-  return ok(appts)
+  return ok(appts.map((a) => ({ ...a, patient: { ...a.patient, phone: decryptPhone(a.patient.phone) } })))
 }
 
 async function book(req: NextRequest) {
@@ -93,15 +95,15 @@ async function book(req: NextRequest) {
           clinicId,
           phoneHash,
           phoneLast4: last4(patientPhone),
-          phone: patientPhone,
+          phone: encryptPhone(patientPhone),
           name: patientName || null,
-          gender: patientGender || 'unknown',
+          gender: (patientGender || 'unknown') as Gender,
           preferredLanguage: 'urdu',
           preferredModality: 'auto',
         },
       })
     } else if (patientName && !patient.name) {
-      patient = await db.patient.update({ where: { id: patient.id }, data: { name: patientName, gender: patientGender || patient.gender } })
+      patient = await db.patient.update({ where: { id: patient.id }, data: { name: patientName, gender: (patientGender || patient.gender) as Gender } })
     }
 
     // Resolve service
@@ -215,6 +217,7 @@ async function book(req: NextRequest) {
           clinicId,
           type: 'debit',
           amount: platformCharge,
+          reason: 'appointment_fee',
           appointmentId: appt.id,
           balanceAfter,
         },
@@ -260,7 +263,7 @@ async function book(req: NextRequest) {
 
     return ok({
       appointmentId: appt.id,
-      patient: { id: patient.id, name: patient.name, phone: patient.phone },
+      patient: { id: patient.id, name: patient.name, phone: decryptPhone(patient.phone) },
       slot: { id: slot.id, startTime: slot.startTime, endTime: slot.endTime, tokenNo: slot.tokenNo },
       fees,
     })
@@ -293,7 +296,7 @@ async function syncCalendarEvent(
     if (doctor.email) attendees.push({ email: doctor.email, displayName: doctor.name })
     if (patient.email) attendees.push({ email: patient.email, displayName: patient.name || undefined })
 
-    let conferenceData = undefined
+    let conferenceData: { createRequest: { requestId: string; conferenceSolutionKey: { type: 'hangoutsMeet' } } } | undefined
     if (modality === 'video') {
       const meetResult = await resolveMeetingProvider(clinicId)
       if (meetResult.type === 'google_meet') {

@@ -16,7 +16,7 @@ export default async function BookPage() {
   const [clinic, doctors, services] = await Promise.all([
     db.clinic.findUnique({ where: { id: clinicId }, select: { name: true } }),
     db.doctor.findMany({ where: { clinicId, active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, speciality: true, slotDurationMin: true, queueMode: true } }),
-    db.service.findMany({ where: { clinicId, active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, baseFee: true, extraClinicFee: true, doctorId: true } }),
+    db.service.findMany({ where: { clinicId, active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, baseFee: true, doctorId: true } }),
   ])
   if (!clinic) redirect('/login')
 

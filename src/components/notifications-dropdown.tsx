@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell, CheckCircle2, AlertCircle, MessageSquare, CalendarClock, Wallet, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ interface Notification {
 
 interface Props {
   clinicId?: string
-  userType: 'platform_admin' | 'platform_staff' | 'clinic_admin' | 'doctor' | 'receptionist'
+  userType: string
 }
 
 export function NotificationsDropdown({ clinicId, userType }: Props) {
@@ -30,25 +30,7 @@ export function NotificationsDropdown({ clinicId, userType }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
-  useEffect(() => {
-    fetchNotifications()
-    // Refresh every 30s
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
-  }, [clinicId, userType])
-
-  // Close on outside click
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    if (open) document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
-
-  async function fetchNotifications() {
+  const fetchNotifications = useCallback(async () => {
     try {
       const params = new URLSearchParams()
       if (clinicId) params.set('clinicId', clinicId)
@@ -61,7 +43,26 @@ export function NotificationsDropdown({ clinicId, userType }: Props) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [clinicId, userType])
+
+  useEffect(() => {
+    // setState happens after await inside fetchNotifications — this is an async callback, not a sync setState.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchNotifications()
+    const interval = setInterval(() => { void fetchNotifications() }, 30000)
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  // Close on outside click
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    if (open) document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
 
   const unread = notifications.filter((n) => !n.read).length
 

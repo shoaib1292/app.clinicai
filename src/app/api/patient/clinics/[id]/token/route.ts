@@ -28,7 +28,7 @@ async function getToken(req: NextRequest, { params }: { params: Promise<{ id: st
     where: {
       clinicId,
       patientId: patient.id,
-      status: { in: ['booked', 'confirmed', 'in_progress', 'completed'] },
+      status: { in: ['booked', 'confirmed', 'in_call', 'completed'] },
       start: { gte: startOfDay, lt: endOfDay },
     },
     select: {

@@ -76,7 +76,7 @@ export async function getPatientMemory(
       clinicId: row.clinicId,
       insight: row.insight,
       riskSignals: (typeof row.riskSignals === 'object' && row.riskSignals
-        ? (row.riskSignals as RiskSignals)
+        ? (row.riskSignals as unknown as RiskSignals)
         : {} as RiskSignals),
       noShowRisk: row.noShowRisk,
     }

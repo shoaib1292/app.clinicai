@@ -83,7 +83,7 @@ export async function logFilteredMessage(clinicId: string | null, reason: string
 export async function resolveClinicFromNumber(phoneNumber: string): Promise<string | null> {
   // Try to find a clinic with a WhatsApp connection for this number
   const conn = await db.whatsAppConnection.findFirst({
-    where: { phoneNumber, status: 'connected' },
+    where: { phone: phoneNumber, status: 'connected' },
     select: { clinicId: true },
   })
   if (conn) return conn.clinicId

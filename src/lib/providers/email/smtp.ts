@@ -5,7 +5,7 @@ const SMTP_HOST = process.env.SMTP_HOST || ''
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587
 const SMTP_USER = process.env.SMTP_USER || ''
 const SMTP_PASSWORD = process.env.SMTP_PASSWORD || ''
-const SMTP_FROM = process.env.SMTP_FROM || 'ClinicAI <noreply@clinicsai.pk>'
+const SMTP_FROM = process.env.SMTP_FROM || 'ClinicAI <noreply@clinicai.pk>'
 
 export class SmtpProvider implements EmailProvider {
   async sendEmail(params: SendEmailParams): Promise<EmailSendResult> {

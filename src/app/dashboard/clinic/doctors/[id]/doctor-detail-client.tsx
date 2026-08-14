@@ -13,7 +13,7 @@ import { ArrowLeft, Stethoscope, CalendarDays, Clock, Activity, Plus, User, Aler
 import { toast } from 'sonner'
 
 interface Schedule { id: string; dayOfWeek: number; startTime: string; endTime: string; breakWindows: string; isEmergency: boolean }
-interface Service { id: string; name: string; durationMin: number; baseFee: number; extraClinicFee?: number | null }
+interface Service { id: string; name: string; durationMin: number; baseFee: number }
 interface ScheduleOverride { id: string; date: Date; type: string; startTime: string | null; endTime: string | null; reason: string | null }
 interface Doctor {
   id: string; name: string; gender: string; speciality: string; slotDurationMin: number
@@ -316,7 +316,7 @@ export function DoctorDetailClient({ doctor: initial }: { doctor: Doctor }) {
                     <div className="text-xs text-muted-foreground">{s.durationMin}min</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-semibold">PKR {s.baseFee + (s.extraClinicFee ?? 0) + 50}</div>
+                    <div className="text-sm font-semibold">PKR {s.baseFee + 50}</div>
                     <div className="text-xs text-muted-foreground">+50 platform</div>
                   </div>
                 </div>

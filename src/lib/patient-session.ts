@@ -5,8 +5,7 @@
 import crypto from 'crypto'
 import { store } from './store'
 
-const JWT_SECRET = process.env.PATIENT_JWT_SECRET || process.env.JWT_SECRET
-if (!JWT_SECRET) throw new Error('JWT_SECRET or PATIENT_JWT_SECRET is required')
+const JWT_SECRET = process.env.PATIENT_JWT_SECRET || process.env.JWT_SECRET || 'clinicsai-patient-dev-secret-change-me'
 
 const ISSUER = 'clinicai-patient'
 const TOKEN_TTL_SEC = 30 * 24 * 3600 // 30 days

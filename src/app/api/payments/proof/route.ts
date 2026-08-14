@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import type { PaymentProofLedgerType } from '@prisma/client'
 import { requireClinicScope, requireType, auditLog } from '@/lib/session'
 import { ok, err, handle } from '@/lib/api'
 
@@ -99,7 +100,7 @@ async function upload(req: NextRequest) {
     data: {
       clinicId: resolvedClinicId,
       appointmentId: appointmentId || null,
-      ledgerType,
+      ledgerType: ledgerType as PaymentProofLedgerType,
       amount: Number(amount),
       payerName,
       payerPhone: payerPhone || null,

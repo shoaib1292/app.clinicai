@@ -55,6 +55,9 @@ See [mobile-dev/taste.md](mobile-dev/taste.md)
 - Use professionally designed, branded HTML email templates with ClinicAI logo, properly styled buttons, and clear ClinicAI sender identity — not plain/low-effort emails. Confidence: 0.65
 - Ensure ClinicAI logo in email templates has constrained dimensions (small, e.g. 36-48px) and renders correctly across email clients — oversized logos break the email layout. Confidence: 0.70
 
+# staff-management
+- The Settings → Staff page must support the full staff lifecycle for every clinic staff role — receptionist, pharmacist, lab admin, accountant: add (with invite email), activate/deactivate, and remove. A management screen that only lists existing staff with no way to add a new member is considered broken by the user ("add karny ka koi way nhi hai... fix karo"). When some roles have create/update/delete routes but others don't, the missing role routes must be added so management works uniformly across all roles. Confidence: 0.65
+
 # communication
 See [communication/taste.md](communication/taste.md)
 # mobile-dev

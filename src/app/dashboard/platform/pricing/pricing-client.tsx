@@ -17,8 +17,8 @@ interface Rule {
   clinicId: string | null
   platformFeeDefault: number
   platformFeeOverride: number | null
-  extraClinicFeeMin: number
-  extraClinicFeeMax: number
+  markupMin: number
+  markupMax: number
   billingMode: string
   clinic: { id: string; name: string; slug: string } | null
 }
@@ -28,7 +28,7 @@ export function PricingClient({ initialRules, clinics }: { initialRules: Rule[];
   const [rules, setRules] = useState(initialRules)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ scope: 'clinic', clinicId: '', platformFeeDefault: '50', platformFeeOverride: '', extraClinicFeeMin: '0', extraClinicFeeMax: '500', billingMode: 'credit' })
+  const [form, setForm] = useState({ scope: 'clinic', clinicId: '', platformFeeDefault: '50', platformFeeOverride: '', markupMin: '0', markupMax: '500', billingMode: 'credit' })
 
   async function add() {
     setLoading(true)
@@ -40,8 +40,8 @@ export function PricingClient({ initialRules, clinics }: { initialRules: Rule[];
         clinicId: form.scope === 'clinic' ? form.clinicId : null,
         platformFeeDefault: Number(form.platformFeeDefault),
         platformFeeOverride: form.platformFeeOverride ? Number(form.platformFeeOverride) : null,
-        extraClinicFeeMin: Number(form.extraClinicFeeMin),
-        extraClinicFeeMax: Number(form.extraClinicFeeMax),
+        markupMin: Number(form.markupMin),
+        markupMax: Number(form.markupMax),
         billingMode: form.billingMode,
       }),
     })
@@ -99,12 +99,12 @@ export function PricingClient({ initialRules, clinics }: { initialRules: Rule[];
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Extra Fee Min (PKR)</Label>
-                  <Input type="number" value={form.extraClinicFeeMin} onChange={(e) => setForm({ ...form, extraClinicFeeMin: e.target.value })} />
+                  <Label>Markup Min (PKR)</Label>
+                  <Input type="number" value={form.markupMin} onChange={(e) => setForm({ ...form, markupMin: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Extra Fee Max (PKR)</Label>
-                  <Input type="number" value={form.extraClinicFeeMax} onChange={(e) => setForm({ ...form, extraClinicFeeMax: e.target.value })} />
+                  <Label>Markup Max (PKR)</Label>
+                  <Input type="number" value={form.markupMax} onChange={(e) => setForm({ ...form, markupMax: e.target.value })} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -160,7 +160,7 @@ export function PricingClient({ initialRules, clinics }: { initialRules: Rule[];
                 <div className="text-xs text-muted-foreground mt-1">
                   Platform fee: <span className="font-medium text-foreground">PKR {r.platformFeeOverride ?? r.platformFeeDefault}</span>
                   {r.platformFeeOverride && <span className="text-muted-foreground"> (override of {r.platformFeeDefault})</span>}
-                  {' · '}Extra bounds: PKR {r.extraClinicFeeMin}–{r.extraClinicFeeMax}
+                  {' · '}Markup bounds: PKR {r.markupMin}–{r.markupMax}
                   {' · '}Billing: {r.billingMode}
                 </div>
               </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { store } from '@/lib/store'
 import { hashPhone } from '@/lib/auth'
+import { encryptPhone } from '@/lib/phone-encryption'
 import { runAgent } from '@/lib/agent'
 import { filterInboundMessage, logFilteredMessage, isDuplicateMessage } from '@/lib/filter'
 import { sendEvolutionMessage, sendEvolutionVoice } from '@/lib/evolution'
@@ -35,6 +36,17 @@ async function broadcastToRealtime(channel: string, message: unknown): Promise<v
  */
 export async function POST(req: NextRequest) {
   try {
+    // Authenticate the inbound webhook. Evolution delivers webhooks with an
+    // `apikey` header (or a query token on some deployments).
+    const apiKey = process.env.EVOLUTION_API_KEY
+    if (apiKey) {
+      const headerKey = req.headers.get('apikey') || req.headers.get('x-api-key')
+      const queryToken = new URL(req.url).searchParams.get('token')
+      if (headerKey !== apiKey && queryToken !== apiKey) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    }
+
     const rawBody = await req.text()
     const payload = JSON.parse(rawBody) as {
       event?: string
@@ -190,7 +202,7 @@ export async function POST(req: NextRequest) {
           clinicId: clinic.id,
           phoneHash,
           phoneLast4: senderPhone.slice(-4),
-          phone: senderPhone,
+          phone: encryptPhone(senderPhone),
           name: data.pushName || null,
           gender: 'unknown',
           preferredLanguage: 'urdu',

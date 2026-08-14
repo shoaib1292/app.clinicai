@@ -69,7 +69,7 @@ PhoneInput.displayName = "PhoneInput";
 const InputComponent = React.forwardRef<
   HTMLInputElement,
   React.ComponentProps<"input"> & { maxDigits?: number }
->(({ className, maxDigits = PHONE_MAX_DIGITS, onChange, country, ...props }, ref) => {
+>(({ className, maxDigits = PHONE_MAX_DIGITS, onChange, ...props }, ref) => {
   // Allow every keystroke to flow through to react-phone-number-input, which
   // parses and reformats the value. The previous implementation counted local
   // digits and *dropped* the change event once the count hit maxDigits — but a

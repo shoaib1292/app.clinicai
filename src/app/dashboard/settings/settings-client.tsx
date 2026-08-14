@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
-import { Loader2, Save, Building2, ToggleLeft, Keyboard, CalendarClock, Palette, Globe } from 'lucide-react'
+import { Building2, ToggleLeft, Keyboard, CalendarClock, Palette, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { ClinicProfileTab, type SettingsForm } from './components/clinic-profile-tab'
 import { FeaturesToggleTab } from './components/features-toggle-tab'
@@ -23,11 +23,14 @@ interface Clinic {
   currency: string
   onlinePaymentsEnabled: boolean
   agentEnabled: boolean
+  pharmacyEnabled: boolean
+  inventoryEnabled: boolean
+  combineFees?: boolean
   logoUrl: string | null
   workingHours: string | null
 }
 
-const SETTINGS_TABS = [
+const SETTINGS_TABS: { value: string; label: string; icon: React.ComponentType<{ className?: string }>; description: string; clinicAdminOnly?: boolean }[] = [
   { value: 'clinic-profile', label: 'Clinic Profile', icon: Building2, description: 'Logo, basic info, and regional settings.' },
   { value: 'branding', label: 'Branding & Info', icon: Palette, description: 'Colors, fonts, doctor branding, agent persona, and stats.' },
   { value: 'google-integration', label: 'Google Integration', icon: Globe, description: 'Calendar sync, Meet, Gmail, Drive, and more.', clinicAdminOnly: true },
@@ -36,12 +39,14 @@ const SETTINGS_TABS = [
   { value: 'keyboard-shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard, description: 'Speed up your workflow with hotkeys.' },
 ] as const
 
-export function SettingsClient({ clinic, userType, subFeatures, brandingData }: {
+export function SettingsClient({ clinic, userType, brandingData, initialTab }: {
   clinic: Clinic | null
   userType: string
-  subFeatures?: Record<string, boolean>
   brandingData?: any
+  initialTab?: string
 }) {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<string>(initialTab && SETTINGS_TABS.some((t) => t.value === initialTab) ? initialTab : 'clinic-profile')
   const [form, setForm] = useState<SettingsForm>({
     name: clinic?.name || '',
     city: clinic?.city || '',
@@ -54,11 +59,18 @@ export function SettingsClient({ clinic, userType, subFeatures, brandingData }: 
     agentEnabled: clinic?.agentEnabled ?? false,
     pharmacyEnabled: clinic?.pharmacyEnabled ?? false,
     inventoryEnabled: clinic?.inventoryEnabled ?? false,
+    combineFees: clinic?.combineFees ?? false,
   })
   const [logoUrl, setLogoUrl] = useState<string | null>(clinic?.logoUrl || null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [savingLogo, setSavingLogo] = useState(false)
+
+  // Keep ?tab= in the URL so tabs are deep-linkable and survive refresh.
+  const onTabChange = useCallback((value: string) => {
+    setActiveTab(value)
+    router.replace(value === 'clinic-profile' ? '/dashboard/settings' : `/dashboard/settings?tab=${value}`, { scroll: false })
+  }, [router])
 
   async function uploadLogo() {
     if (!clinic || !logoFile) return
@@ -114,7 +126,7 @@ export function SettingsClient({ clinic, userType, subFeatures, brandingData }: 
         <p className="text-muted-foreground">{clinic ? 'Manage your clinic profile, features, and preferences.' : 'Keyboard shortcuts reference.'}</p>
       </div>
 
-      <Tabs defaultValue="clinic-profile" className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+      <Tabs value={activeTab} onValueChange={onTabChange} className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
         <TabsList className="h-fit flex-col items-stretch gap-1 bg-transparent p-0 md:sticky md:top-6 self-start">
           {SETTINGS_TABS.map((tab) => {
             if (tab.clinicAdminOnly && userType !== 'clinic_admin') return null
@@ -170,7 +182,7 @@ export function SettingsClient({ clinic, userType, subFeatures, brandingData }: 
 
           <TabsContent value="features-toggle">
             {clinic ? (
-              <FeaturesToggleTab form={form} setForm={setForm} onSave={save} saving={saving} subFeatures={subFeatures} />
+              <FeaturesToggleTab clinicId={clinic.id} form={form} setForm={setForm} />
             ) : (
               <p className="text-sm text-muted-foreground">Feature toggles are available to clinic admins only.</p>
             )}

@@ -28,7 +28,7 @@ export interface SettingsForm {
 interface Props {
   clinicId: string
   form: SettingsForm
-  setForm: (form: SettingsForm) => void
+  setForm: (form: SettingsForm | ((prev: SettingsForm) => SettingsForm)) => void
   logoUrl: string | null
   setLogoFile: (file: File | null) => void
   logoFile: File | null

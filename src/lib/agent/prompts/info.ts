@@ -5,7 +5,7 @@ export async function buildInfoPrompt(clinicId: string): Promise<string> {
     where: { id: clinicId },
     include: {
       doctors: { where: { active: true } },
-      services: { where: { active: true } },
+      services: { where: { active: true }, include: { doctor: true } },
     },
   })
   if (!clinic) throw new Error('Clinic not found')

@@ -24,7 +24,7 @@ export default async function OnboardingPage() {
   if (session.type === 'clinic_admin') {
     const admin = await db.clinicAdmin.findUnique({
       where: { id: session.sub },
-      select: { emailVerified: true },
+      select: { emailVerified: true, email: true },
     })
     if (!admin?.emailVerified) {
       redirect(`/signup/verify?email=${encodeURIComponent(admin?.email || session.email || '')}`)

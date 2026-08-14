@@ -6,18 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, FileText, Clock, UserCheck, UserX } from 'lucide-react'
+import { toast } from 'sonner'
 
-interface Record {
+interface AttendanceRecord {
   id: string; staffId: string; staffType: string; staffName: string
   date: string; clockIn: string | null; clockOut: string | null
   status: string; minutesLate: number | null
 }
 
 export function AttendancePage({ clinicId }: { clinicId: string }) {
-  const [records, setRecords] = useState<Record[]>([])
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [clocking, setClocking] = useState(false)
-  const [myRecord, setMyRecord] = useState<Record | null>(null)
+  const [myRecord, setMyRecord] = useState<AttendanceRecord | null>(null)
 
   useEffect(() => { fetchRecords() }, [])
 
@@ -29,7 +30,7 @@ export function AttendancePage({ clinicId }: { clinicId: string }) {
       setRecords(json.data)
       // Find today's record for current user
       const today = new Date().toISOString().slice(0, 10)
-      const mine = json.data.find((r: Record) => r.date.slice(0, 10) === today && !r.clockOut)
+      const mine = json.data.find((r: AttendanceRecord) => r.date.slice(0, 10) === today && !r.clockOut)
       setMyRecord(mine || null)
     }
     setLoading(false)
@@ -47,7 +48,6 @@ export function AttendancePage({ clinicId }: { clinicId: string }) {
     toast.success(action === 'in' ? 'Clocked in!' : 'Clocked out!')
     fetchRecords()
   }
-  function toast(_: any) {} // silence ts
 
   const statusColors: Record<string, string> = { present: 'bg-green-100 text-green-700', absent: 'bg-red-100 text-red-700', late: 'bg-amber-100 text-amber-700', half_day: 'bg-blue-100 text-blue-700', pending: 'bg-gray-100 text-gray-600', on_leave: 'bg-purple-100 text-purple-700' }
 

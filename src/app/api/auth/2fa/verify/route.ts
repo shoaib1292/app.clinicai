@@ -23,13 +23,13 @@ async function verify2FA(req: NextRequest) {
   if (!body.code) return err('code required', 400)
 
   // Fetch user record with pending setup data
-  let user: { id: string; twoFactorPendingSetup: string | null; twoFactorSecret: string | null; twoFactorBackupCodes: string | null } | null = null
+  let user: { id: string; twoFactorPendingSetup: string | null; twoFactorSecret: string | null; twoFactorBackupCodes: string | null; twoFactorEnabled: boolean } | null = null
   if (session.type === 'platform_admin') {
-    user = await db.platformAdmin.findUnique({ where: { id: session.sub }, select: { id: true, twoFactorPendingSetup: true, twoFactorSecret: true, twoFactorBackupCodes: true } })
+    user = await db.platformAdmin.findUnique({ where: { id: session.sub }, select: { id: true, twoFactorPendingSetup: true, twoFactorSecret: true, twoFactorBackupCodes: true, twoFactorEnabled: true } })
   } else if (session.type === 'clinic_admin') {
-    user = await db.clinicAdmin.findUnique({ where: { id: session.sub }, select: { id: true, twoFactorPendingSetup: true, twoFactorSecret: true, twoFactorBackupCodes: true } })
+    user = await db.clinicAdmin.findUnique({ where: { id: session.sub }, select: { id: true, twoFactorPendingSetup: true, twoFactorSecret: true, twoFactorBackupCodes: true, twoFactorEnabled: true } })
   } else if (session.type === 'platform_staff') {
-    user = await db.platformStaff.findUnique({ where: { id: session.sub }, select: { id: true, twoFactorPendingSetup: true, twoFactorSecret: true, twoFactorBackupCodes: true } })
+    user = await db.platformStaff.findUnique({ where: { id: session.sub }, select: { id: true, twoFactorPendingSetup: true, twoFactorSecret: true, twoFactorBackupCodes: true, twoFactorEnabled: true } })
   }
 
   if (!user) return err('User not found', 404)

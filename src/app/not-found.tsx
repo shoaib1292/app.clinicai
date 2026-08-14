@@ -12,7 +12,7 @@ export default async function NotFound() {
   const hostname = host.replace(/:\d+$/, '')
 
   // Try to resolve a clinic from the hostname for clinic-themed 404
-  let clinic = null
+  let clinic: { id: string; name: string; slug: string; city: string | null; logoUrl: string | null; logoKey: string | null; brandColor: string | null; websiteEnabled: boolean } | null = null
   if (hostname !== appDomain && hostname !== parentDomain && hostname !== 'clinicai.pk') {
     // Check if this is a known clinic subdomain or custom domain
     for (const domain of [parentDomain, 'localhost']) {

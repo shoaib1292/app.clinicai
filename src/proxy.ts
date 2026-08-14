@@ -171,6 +171,50 @@ function parseJwt(token: string): { exp: number; [key: string]: unknown } | null
 
 const authRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/forgot-password', '/api/auth/reset', '/api/auth/2fa']
 
+// API routes that should skip token refresh because they use their own auth
+// (webhooks, public booking, public patient portal, OAuth callbacks, etc).
+function shouldSkipRefresh(pathname: string): boolean {
+  return (
+    pathname.startsWith('/api/webhooks/') ||
+    pathname.startsWith('/api/public/') ||
+    pathname.startsWith('/api/patient/') ||
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/b/') ||
+    pathname.startsWith('/api/upload') ||
+    pathname.startsWith('/api/storage/')
+  )
+}
+
+// Refresh an expired access token using the refresh cookie. Returns a response
+// with the new cookies attached, or null if refresh isn't possible.
+async function refreshSessionIfNeeded(request: NextRequest): Promise<NextResponse | null> {
+  const sessionCookie = request.cookies.get(SESSION_COOKIE)?.value
+  const refreshCookie = request.cookies.get(REFRESH_COOKIE)?.value
+  if (!refreshCookie) return null
+
+  const payload = sessionCookie ? parseJwt(sessionCookie) : null
+  // Refresh only when the access token is missing OR expired.
+  if (payload && payload.exp > Math.floor(Date.now() / 1000)) return null
+
+  try {
+    const fwdProto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '')
+    const fwdHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host
+    const baseUrl = `${fwdProto}://${fwdHost}`
+    const refreshRes = await fetch(`${baseUrl}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { Cookie: `${REFRESH_COOKIE}=${refreshCookie}` },
+    })
+    if (!refreshRes.ok) return null
+    const response = NextResponse.next()
+    refreshRes.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'set-cookie') response.headers.append('Set-Cookie', value)
+    })
+    return response
+  } catch {
+    return null
+  }
+}
+
 async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const origin = request.headers.get('origin')
@@ -205,68 +249,40 @@ async function proxy(request: NextRequest) {
     return addCorsHeaders(res, origin)
   }
 
-  // Auth refresh on dashboard routes
-  if (pathname.startsWith('/dashboard')) {
+  // Auth refresh on dashboard page routes and protected API routes.
+  const isProtectedApi = pathname.startsWith('/api/') && !shouldSkipRefresh(pathname)
+  if (pathname.startsWith('/dashboard') || isProtectedApi) {
     const sessionCookie = request.cookies.get(SESSION_COOKIE)?.value
-    const refreshCookie = request.cookies.get(REFRESH_COOKIE)?.value
 
-    if (sessionCookie) {
-      const payload = parseJwt(sessionCookie)
-      if (!payload || payload.exp <= Math.floor(Date.now() / 1000)) {
-        if (refreshCookie) {
-          try {
-            const fwdProto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '')
-            const fwdHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host
-            const baseUrl = `${fwdProto}://${fwdHost}`
-            const refreshRes = await fetch(`${baseUrl}/api/auth/refresh`, {
-              method: 'POST',
-              headers: { Cookie: `${REFRESH_COOKIE}=${refreshCookie}` },
-            })
-            if (refreshRes.ok) {
-              const response = NextResponse.next()
-              refreshRes.headers.forEach((value, key) => {
-                if (key.toLowerCase() === 'set-cookie') response.headers.append('Set-Cookie', value)
-              })
-              applySecurityHeaders(response)
-              addCorsHeaders(response, origin)
-              return response
-            }
-          } catch {}
-        }
-        const loginUrl = new URL('/login', request.url)
-        loginUrl.searchParams.set('redirect', pathname)
-        const redir = NextResponse.redirect(loginUrl)
-        return addCorsHeaders(redir, origin)
-      }
-    } else if (refreshCookie) {
-      try {
-        const fwdProto2 = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '')
-        const fwdHost2 = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host
-        const baseUrl2 = `${fwdProto2}://${fwdHost2}`
-        const refreshRes = await fetch(`${baseUrl2}/api/auth/refresh`, {
-          method: 'POST',
-          headers: { Cookie: `${REFRESH_COOKIE}=${refreshCookie}` },
-        })
-        if (refreshRes.ok) {
-          const response = NextResponse.next()
-          refreshRes.headers.forEach((value, key) => {
-            if (key.toLowerCase() === 'set-cookie') response.headers.append('Set-Cookie', value)
-          })
-          applySecurityHeaders(response)
-          addCorsHeaders(response, origin)
-          return response
-        }
-      } catch {}
-      const loginUrl = new URL('/login', request.url)
-      loginUrl.searchParams.set('redirect', pathname)
-      const redir2 = NextResponse.redirect(loginUrl)
-      return addCorsHeaders(redir2, origin)
-    } else {
-      const loginUrl = new URL('/login', request.url)
-      loginUrl.searchParams.set('redirect', pathname)
-      const redir3 = NextResponse.redirect(loginUrl)
-      return addCorsHeaders(redir3, origin)
+    // Valid access token → proceed normally.
+    const payload = sessionCookie ? parseJwt(sessionCookie) : null
+    if (payload && payload.exp > Math.floor(Date.now() / 1000)) {
+      const okResponse = NextResponse.next()
+      applySecurityHeaders(okResponse)
+      return addCorsHeaders(okResponse, origin)
     }
+
+    // Expired/missing access token + refresh cookie → try refresh.
+    const refreshed = await refreshSessionIfNeeded(request)
+    if (refreshed) {
+      applySecurityHeaders(refreshed)
+      addCorsHeaders(refreshed, origin)
+      return refreshed
+    }
+
+    // For API routes, let the route handler return its own 401 instead of
+    // redirecting to /login (JSON clients expect a JSON error body).
+    if (isProtectedApi) {
+      const apiPass = NextResponse.next()
+      applySecurityHeaders(apiPass)
+      return addCorsHeaders(apiPass, origin)
+    }
+
+    // Dashboard page routes without a valid session → redirect to login.
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('redirect', pathname)
+    const redir = NextResponse.redirect(loginUrl)
+    return addCorsHeaders(redir, origin)
   }
 
   const response = NextResponse.next()

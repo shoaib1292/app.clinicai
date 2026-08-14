@@ -11,14 +11,14 @@ const webhookReceiver = new WebhookReceiver(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
 
 export const LIVEKIT_CLIENT_URL = LIVEKIT_URL
 
-export function generateJoinToken(options: {
+export async function generateJoinToken(options: {
   roomName: string
   identity: string
   name: string
   canPublish?: boolean
   canSubscribe?: boolean
   ttlSeconds?: number
-}): string {
+}): Promise<string> {
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: options.identity,
     name: options.name,
@@ -30,7 +30,7 @@ export function generateJoinToken(options: {
     canPublish: options.canPublish ?? true,
     canSubscribe: options.canSubscribe ?? true,
   })
-  return at.toJwt()
+  return await at.toJwt()
 }
 
 export async function createLiveKitRoom(options?: {

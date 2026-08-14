@@ -95,7 +95,6 @@ async function chat(req: NextRequest, { params }: { params: Promise<{ id: string
     userMessage: body.message || '',
     modality: body.modality || 'text',
     voiceAudioBase64: body.voiceAudioBase64,
-    channel: 'app',
   })
 
   // Persist outbound message
@@ -120,7 +119,7 @@ async function chat(req: NextRequest, { params }: { params: Promise<{ id: string
     conversationId,
     direction: 'out',
     body: agentResult.reply,
-  }).catch(() => {})
+  })
 
   return ok({
     reply: agentResult.reply,

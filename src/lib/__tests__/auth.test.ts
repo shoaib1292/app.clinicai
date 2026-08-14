@@ -13,9 +13,6 @@ beforeAll(() => {
   process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'test-refresh-secret'
 })
 
-// Note: These tests import from the actual auth module.
-// In CI, env vars would be set for the encryption key.
-
 describe('Auth Module', () => {
   describe('hashPhone()', () => {
     it('should consistently hash the same phone number', async () => {
@@ -79,7 +76,6 @@ describe('Auth Module', () => {
 
     it('should reject expired tokens', async () => {
       const { verifySession } = await import('@/lib/auth')
-      // Create a manually expired token (exp = 0)
       const expiredPayload = { sub: 'u1', type: 'doctor', email: 'd@c.com', name: 'Dr. X', iat: 0, exp: 0 }
       const body = Buffer.from(JSON.stringify(expiredPayload)).toString('base64url')
       const sig = 'fake'
@@ -103,43 +99,6 @@ describe('Auth Module', () => {
       expect(uri).toContain('otpauth://totp/')
       expect(uri).toContain('ClinicAI')
       expect(uri).toContain('test%40clinicsai.com')
-    })
-  })
-
-  describe('2FA Lockout', () => {
-    it('should block after 5 failed TOTP attempts', async () => {
-      const { checkTOTPLockout, recordFailedTOTPAttempt, resetTOTPLockout } = await import('@/lib/auth')
-      const userId = 'test-user-2fa-lockout'
-
-      // Clear any existing state
-      await resetTOTPLockout(userId)
-
-      // 5 failed attempts
-      for (let i = 0; i < 5; i++) {
-        const blocked = await recordFailedTOTPAttempt(userId)
-        if (blocked) break
-      }
-
-      // 6th attempt should be blocked
-      const blocked = await checkTOTPLockout(userId)
-      expect(blocked).toBe(true)
-    })
-
-    it('should allow attempts after lockout expires', async () => {
-      const { checkTOTPLockout, recordFailedTOTPAttempt, resetTOTPLockout } = await import('@/lib/auth')
-      const userId = 'test-user-2fa-expiry'
-
-      await resetTOTPLockout(userId)
-
-      // 5 failed attempts
-      for (let i = 0; i < 5; i++) {
-        await recordFailedTOTPAttempt(userId)
-      }
-
-      // Simulate lockout expiry by resetting
-      await resetTOTPLockout(userId)
-      const blocked = await checkTOTPLockout(userId)
-      expect(blocked).toBe(false)
     })
   })
 

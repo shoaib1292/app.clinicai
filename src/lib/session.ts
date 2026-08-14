@@ -35,6 +35,11 @@ export async function requireType(...types: string[]): Promise<SessionPayload> {
   return session
 }
 
+// Require platform-level scope (analytics/email-analytics authorization gate)
+export async function requireScope(_scope: string): Promise<SessionPayload> {
+  return requireType('platform_admin', 'platform_staff')
+}
+
 // Require clinic-scoped access; returns clinicId
 export async function requireClinicScope(): Promise<{ session: SessionPayload; clinicId: string }> {
   const session = await requireAuth()
@@ -55,12 +60,12 @@ export async function auditLog(params: {
     await db.auditLog.create({
       data: {
         actorId: params.actorId,
-        actorType: params.actorType,
+        actorType: params.actorType || 'system',
         clinicId: params.clinicId,
         action: params.action,
         target: params.target,
         metadata: JSON.stringify(params.metadata ?? {}),
-        ip: params.ip,
+        ip: params.ip ?? null,
       },
     })
   } catch (e) {

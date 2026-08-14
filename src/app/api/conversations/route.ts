@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClinicScope } from '@/lib/session'
+import { decryptPhone } from '@/lib/phone-encryption'
 import { ok, err, handle } from '@/lib/api'
 
 async function list(req: NextRequest) {
@@ -17,7 +18,7 @@ async function list(req: NextRequest) {
         search ? {
           OR: [
             { patient: { name: { contains: search } } },
-            { patient: { phone: { contains: search } } },
+            { patient: { phoneLast4: { contains: search } } },
             { summary: { contains: search } },
           ],
         } : {},
@@ -30,7 +31,7 @@ async function list(req: NextRequest) {
       _count: { select: { messages: true } },
     },
   })
-  return ok(convos)
+  return ok(convos.map((c) => ({ ...c, patient: { ...c.patient, phone: decryptPhone(c.patient.phone) } })))
 }
 
 export const GET = handle(list)

@@ -67,7 +67,7 @@ export default async function InvoicesPage() {
                       <TableHead>Period</TableHead>
                       <TableHead className="text-right">Appointments</TableHead>
                       <TableHead className="text-right">Platform Fee</TableHead>
-                      <TableHead className="text-right">Extra Clinic</TableHead>
+                      <TableHead className="text-right">Clinic Markup</TableHead>
                       <TableHead className="text-right">Meta Cost</TableHead>
                       <TableHead className="text-center">Status</TableHead>
                     </TableRow>
@@ -81,7 +81,7 @@ export default async function InvoicesPage() {
                         </TableCell>
                         <TableCell className="text-right">{i.totalAppointments}</TableCell>
                         <TableCell className="text-right">PKR {i.platformFeeTotal.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">PKR {i.extraClinicFeeTotal.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">PKR {i.clinicMarkupTotal.toLocaleString()}</TableCell>
                         <TableCell className="text-right">${i.metaCostTotal.toFixed(2)}</TableCell>
                         <TableCell className="text-center"><Badge variant={STATUS_VARIANT[i.status] || 'secondary'} className="text-xs capitalize">{i.status}</Badge></TableCell>
                       </TableRow>

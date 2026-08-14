@@ -156,7 +156,11 @@ async function runProductionMode() {
       }
 
       if (!sent && clinic.metaConnected && clinic.metaPhoneId) {
-        const metaToken = clinic.metaTokenEnc ? decryptMetaToken(clinic.metaTokenEnc) : ''
+        const metaConn = await db.whatsAppConnection.findFirst({
+          where: { clinicId: clinic.id, mode: 'meta', status: 'connected' },
+          select: { metaTokenEnc: true },
+        })
+        const metaToken = metaConn?.metaTokenEnc ? decryptMetaToken(metaConn.metaTokenEnc) : ''
         if (metaToken) {
           const res = await sendMetaMessage(clinic.metaPhoneId, metaToken, phone, message)
           sent = res.ok

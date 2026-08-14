@@ -1,6 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ===== dependencies =====
 node_modules
 /.pnp
 .pnp.*
@@ -10,61 +10,61 @@ node_modules
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
+# ===== build output =====
 /.next/
-/apps/
-/clinicai-landing/
 /out/
-
-# production
 /build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-
-# typescript
+/coverage
+dist
 *.tsbuildinfo
 next-env.d.ts
-local-*
-.claude
-.z-ai-config
-*.log
-dev.log
-dev.out.log
-test
-prompt
 
-server.log
-# Skills directory
-/skills/
+# ===== separate apps (own repos) =====
+/apps/
+/clinicai-landing/
 
-# LLM config dumped at runtime (contains decrypted API keys)
+# ===== local scratch / tool dirs =====
+agent-ctx/
+tool-results/
+website-builder-plan/
+
+# ===== env / secrets (never commit) =====
+.env
+.env.*
+!.env.example
+
+# ===== local tool config (Command Code) =====
+.commandcode/
 .llm-config
+.z-ai-config
 
-# Temp/debug artifacts
+# ===== local runtime data (never commit) =====
+data/
+db/
+.pgsql/
+.redis/
+appendonlydir/
+.zcode/
+.zscripts/
+/uploads/
+
+# ===== logs =====
+*.log
+server.log
+
+# ===== temp / debug artifacts =====
 *.bak
 *.tgz
 bun.lock
 metro-bundle.js
+.DS_Store
+*.pem
 
-# Dev scripts (one-off)
+# ===== one-off dev/test scripts =====
+debug_val.test.ts
+test-cloudinary.ts
+playwright.config.ts
+dev.ps1
 _chk.ps1
 _exec2.ps1
 _logprobe.ps1
@@ -75,15 +75,56 @@ add_domain.ps1
 check_pg.ps1
 check_redis.ps1
 connect_net.ps1
+coolify_probe.ps1
 deploy.ps1
 explore_api.ps1
 get_cookies.ps1
 login.ps1
 patch_net.ps1
 route_scan.ps1
-coolify_probe.ps1
 
-# Temp output files
+# ===== seed / scratch scripts (fake demo data, dev-only) =====
+prisma/seed.ts
+prisma/schema.old.prisma
+scripts/seed-*.ts
+scripts/dump-credentials.ts
+scripts/get-session.ts
+scripts/tmp-inspect.*
+scripts/check-data.ts
+scripts/test-functional.ts
+scripts/smart-agent-smoke.ts
+scripts/time-analytics.ts
+scripts/repro-rec-browser.ts
+
+# ===== internal planning / scratch docs =====
+offer.md
+design-google-intigration.md
+LEARNING_ROADMAP.md
+QA-REPORT.md
+livekit.yaml
+GOOGLE_SETUP_GUIDE.md
+
+# ===== scratch text/debug output (one-off) =====
+dev-final.txt
+dev-log.txt
+dev-log2.txt
+dev-next.txt
+dev-next2.txt
+dev_out.txt
+dev_out.log
+dev_run.log
+devserver.log
+landing_dev.log
+realtime.log
+tunnel.log
+nextbuild.log
+nextbuild2.log
+nextbuild3.log
+nextbuild_offers.txt
+nextbuild_offers2.txt
+tw_install_debug.txt
+tw_install.txt
+tw_v.txt
 dbg.txt
 dbgval.txt
 dbgval2.txt
@@ -101,6 +142,14 @@ coolify_session.xml
 dashboarddesign.md.txt
 migrate_wh.txt
 npm_clean.txt
+npm_ci.log
+npm_ci2.log
+npm_ci_clean.log
+npm_ci_dev.log
+npm_ci_full.log
+npm_install_tw.log
+npm_install_tw2.log
+npm_tw_verbose.log
 resp.html
 resp2.html
 resp3.txt
@@ -109,8 +158,6 @@ schema_history.txt
 session_token.txt
 skills-lock.json
 stalwart_page.txt
-tw_install.txt
-tw_v.txt
 val_run.txt
 val_run2.txt
 guard_run.txt
@@ -124,34 +171,45 @@ app_raw.json
 deploy_raw.json
 test_result.json
 openapi.json
-
-# Debug images
 error1.jpeg
 error2.jpeg
+v.log
+tsc.log
+tsc2.log
+tsc_full.log
+eslint.log
+prisma-gen.log
+prisma-gen2.log
+prisma-push.log
+inst.log
+inst2.log
+inst3.log
+test2.log
+test3.log
+test_full1.log
+test_json.log
+test_output.log
+vitest.log
+debug.log
+concurrently_debug.log
+concurrently_debug2.log
+dev_agent_test.log
+dev_err.log
+dev_next.log
+dev.log
 
-# Local data dirs
-data/
-db/
-.pgsql/
-.redis/
-appendonlydir/
-.zcode/
-.zscripts/
-~/
-
-# Agent/tool scratch
-agent-ctx/
-tool-results/
-website-builder-plan/
-
-# One-off tests
-debug_val.test.ts
-test-cloudinary.ts
-playwright.config.ts
-
-# Shell artifacts
+# ===== accidental shell artifacts =====
 $((Get-Item
 $null
-%PGLIB%/
 1
 4
+-p/
+done/
+echo/
+mkdir/
+~/
+%PGLIB%/
+
+# ===== misc =====
+.vercel
+/skills/

@@ -27,7 +27,9 @@ export interface ValidationResult {
 /**
  * Validate an agent response against the tool results it was based on.
  */
-export function validateAgentResponse(response: string, toolResults: ToolResult[]): ValidationResult {
+export type DbVerifier = (appointmentId: string) => Promise<{ exists: boolean; totalFee?: number; status?: string }>
+
+export async function validateAgentResponse(response: string, toolResults: ToolResult[], verifyDb?: DbVerifier): Promise<ValidationResult> {
   const issues: string[] = []
   const lower = response.toLowerCase()
 
@@ -36,7 +38,7 @@ export function validateAgentResponse(response: string, toolResults: ToolResult[
     /(?:take|eat|drink|use)\s+(?:this|these)\s+(?:medicine|tablet|capsule|syrup)/i,
     /(?:you should|aap ko|aap chahiye)\s+(?:take|khaa|pee|use)\s+/i,
     /(?:diagnosis|bimari|marz)\s+(?:is|hai)\s+/i,
-    /(?:prescription|dawa)\s+(?:for|ke liye)\s+/i,
+    /(?:prescription|dawa|dawai|medicine)\s+(?:for|ke liye|leni|lena)\s*/i,
   ]
   for (const pattern of medicalAdvicePatterns) {
     if (pattern.test(response)) {
@@ -120,7 +122,7 @@ export function validateAgentResponse(response: string, toolResults: ToolResult[
         const feeMatch = response.match(feePattern)
         if (feeMatch) {
           const mentionedFee = parseInt(feeMatch[1])
-          if (fees.total && Math.abs(mentionedFee - fees.total) > 10) {
+          if (fees.total && Math.abs(mentionedFee - fees.total) > 1) {
             issues.push(`Agent mentioned fee PKR ${mentionedFee} but actual is PKR ${fees.total}`)
             return {
               valid: false,
@@ -137,15 +139,71 @@ export function validateAgentResponse(response: string, toolResults: ToolResult[
   // 5. Check for doctor names not in the clinic
   for (const tr of toolResults) {
     if (tr.name === 'get_doctor_status' || tr.name === 'get_live_queue_status') {
-      const result = tr.result as { name?: string }
-      if (result.name) {
-        // If response mentions a doctor name that's very different from the tool result
-        // This is a soft check — only flag if response invents a clearly different name
+      const result = tr.result as { name?: string; doctors?: Array<{ name?: string }> }
+      const knownNames = new Set<string>()
+      if (result.name) knownNames.add(result.name.toLowerCase().replace(/^dr\.?\s*/i, ''))
+      for (const d of result.doctors || []) {
+        if (d.name) knownNames.add(d.name.toLowerCase().replace(/^dr\.?\s*/i, ''))
+      }
+      if (knownNames.size > 0) {
+        // Extract doctor mentions like "Dr. Ali", "Doctor Sana", "Dr Sana"
+        const doctorMentions = response.match(/\bdr\.?\s+([A-Za-z]+)/gi) || []
+        for (const mention of doctorMentions) {
+          const name = mention.replace(/^dr\.?\s+/i, '').toLowerCase()
+          if (!knownNames.has(name)) {
+            issues.push(`Agent mentioned doctor "${mention.trim()}" which is not in the known doctor list`)
+            return {
+              valid: false,
+              issues,
+              shouldRegenerate: true,
+              stricterPrompt: 'STRICT: Only mention doctors whose names appear in the tool results. Do NOT invent doctor names.',
+            }
+          }
+        }
       }
     }
   }
 
-  // 6. Check response is not empty or just tool-call artifacts
+  // 6. Verify claimed booking/cancel against the database when a verifier is provided
+  if (verifyDb) {
+    const hasBookingClaim = /\b(book|booking|confirm|appointment)\b/i.test(response)
+    const hasCancelClaim = /\b(cancel|cancelled|munsakh)\b/i.test(response)
+
+    const bookingTool = toolResults.find((t) => t.name === 'book_appointment')
+    const cancelTool = toolResults.find((t) => t.name === 'cancel_appointment')
+
+    if ((hasCancelClaim && cancelTool) || (hasBookingClaim && bookingTool)) {
+      const appt = (cancelTool?.result ?? bookingTool?.result) as { appointment?: { id?: string; fees?: { total?: number } } }
+      const apptId = appt?.appointment?.id
+      if (apptId) {
+        const dbResult = await verifyDb(apptId)
+
+        if (cancelTool && dbResult.exists && dbResult.status !== 'cancelled') {
+          issues.push('Agent claimed cancellation but the appointment is not cancelled in the database')
+          return {
+            valid: false,
+            issues,
+            shouldRegenerate: true,
+            stricterPrompt: 'STRICT: Do not claim an appointment was cancelled unless the cancellation was confirmed. Verify the actual status before telling the patient it was cancelled.',
+          }
+        }
+
+        if (bookingTool && dbResult.exists && dbResult.totalFee !== undefined && appt?.appointment?.fees?.total !== undefined) {
+          if (Math.abs(dbResult.totalFee - appt.appointment.fees.total) > 10) {
+            issues.push(`DB fee ${dbResult.totalFee} differs from quoted fee ${appt.appointment.fees.total}`)
+            return {
+              valid: false,
+              issues,
+              shouldRegenerate: true,
+              stricterPrompt: `STRICT: The actual fee is PKR ${dbResult.totalFee}. Do NOT quote PKR ${appt.appointment.fees.total}.`,
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 7. Check response is not empty or just tool-call artifacts
   const cleanResponse = response.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').trim()
   if (cleanResponse.length < 5) {
     issues.push('Response is too short after stripping tool calls')

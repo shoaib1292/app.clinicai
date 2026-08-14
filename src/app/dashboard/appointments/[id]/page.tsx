@@ -68,8 +68,8 @@ export default async function AppointmentDetailPage({ params }: { params: Promis
     slot: appt.slot
       ? {
           ...appt.slot,
-          startTime: appt.slot.startTime.toISOString(),
-          endTime: appt.slot.endTime.toISOString(),
+          startTime: appt.slot.startTime,
+          endTime: appt.slot.endTime,
         }
       : null,
     reminders: appt.reminders.map((r) => ({

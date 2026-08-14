@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { store } from '@/lib/store'
 import { hashPhone } from '@/lib/auth'
+import { encryptPhone } from '@/lib/phone-encryption'
 import { runAgent } from '@/lib/agent'
 import { filterInboundMessage, logFilteredMessage, isDuplicateMessage } from '@/lib/filter'
 import { sendMetaMessage, sendMetaAudio, verifyMetaSignature, getMetaVerifyToken, decryptMetaToken } from '@/lib/meta'
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
             clinicId: clinic.id,
             phoneHash,
             phoneLast4: senderPhone.slice(-4),
-            phone: senderPhone,
+            phone: encryptPhone(senderPhone),
             gender: 'unknown',
             preferredLanguage: 'urdu',
             preferredModality: 'auto',

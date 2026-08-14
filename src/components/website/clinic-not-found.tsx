@@ -7,9 +7,12 @@ interface ClinicNotFoundProps {
   clinic: {
     name: string
     slug: string
+    city: string | null
     brandColor: string | null
     logoUrl: string | null
+    logoKey: string | null
     websiteEnabled: boolean
+    id: string
   } | null
   host: string
 }

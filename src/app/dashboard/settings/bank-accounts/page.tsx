@@ -2,36 +2,25 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { db } from '@/lib/db'
 import { DashboardShell, settingsNav } from '@/components/dashboard-shell'
+import { BankAccountsClient } from '@/app/dashboard/clinic/bank-accounts/bank-accounts-client'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsBankAccountsPage() {
   const session = await getSession()
   if (!session || !session.clinicId) redirect('/login')
+  if (session.type !== 'clinic_admin') redirect('/dashboard')
 
-  const accounts = await db.clinicBankAccount.findMany({
-    where: { clinicId: session.clinicId },
-    orderBy: { createdAt: 'desc' },
-  })
+  const clinicId = session.clinicId
+  const [clinic, accounts] = await Promise.all([
+    db.clinic.findUnique({ where: { id: clinicId }, select: { name: true } }),
+    db.clinicBankAccount.findMany({ where: { clinicId }, orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }] }),
+  ])
+  if (!clinic) redirect('/login')
 
   return (
-    <DashboardShell userType={session.type} userName={session.name} navItems={settingsNav} settingsSidebar>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Bank Accounts</h1>
-        <p className="text-muted-foreground">Manage bank accounts and wallets for receiving patient payments.</p>
-        {accounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No bank accounts added yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {accounts.map((a) => (
-              <div key={a.id} className="p-3 rounded-lg border">
-                <div className="font-medium">{a.bankName}</div>
-                <div className="text-sm text-muted-foreground">{a.accountTitle} — {a.accountNumber}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+    <DashboardShell userType="clinic_admin" userName={session.name} clinicName={clinic.name} navItems={settingsNav} settingsSidebar>
+      <BankAccountsClient clinicId={clinicId} accounts={accounts} />
     </DashboardShell>
   )
 }

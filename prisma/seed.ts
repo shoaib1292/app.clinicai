@@ -6,10 +6,9 @@
  *
  * Run: bun run db:seed
  */
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Gender, type AppointmentStatus, type MessageDirection, type MessageType } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { hashPhone, encrypt } from '../src/lib/auth'
-
 const db = new PrismaClient()
 
 const PASSWORD = 'ClinicAI@2026' // shared default password for all seeded accounts
@@ -234,9 +233,9 @@ async function main() {
   // 4. CLINIC ADMINS + RECEPTIONISTS + DOCTORS
   // ========================================================================
   console.log('👨‍⚕️ Creating clinic admins, receptionists, doctors...')
-  const clinicAdmins = []
-  const receptionists = []
-  const doctors = []
+  const clinicAdmins: Awaited<ReturnType<typeof db.clinicAdmin.create>>[] = []
+  const receptionists: Awaited<ReturnType<typeof db.receptionist.create>>[] = []
+  const doctors: Awaited<ReturnType<typeof db.doctor.create>>[] = []
 
   for (const [idx, clinic] of clinics.entries()) {
     const cadmin = await db.clinicAdmin.create({
@@ -286,7 +285,7 @@ async function main() {
       const doc = await db.doctor.create({
         data: {
           name: ds.name,
-          gender: ds.gender,
+          gender: ds.gender as Gender,
           speciality: ds.spec,
           slotDurationMin: 15,
           queueMode: 'hybrid',
@@ -411,7 +410,7 @@ async function main() {
     { name: 'Hamza Sheikh', gender: 'male', phone: '+923331234575' },
   ]
 
-  const patients = []
+  const patients: Array<Awaited<ReturnType<typeof db.patient.create>> & { clinicId: string; clinicIndex: number }> = []
   for (const [ci, clinic] of clinics.entries()) {
     // Each clinic gets a subset of patients (with overlap allowed — same number in 2 clinics = different records)
     for (const [pi, pn] of patientNames.entries()) {
@@ -423,7 +422,7 @@ async function main() {
           phoneLast4: phone.slice(-4),
           phone,
           name: pn.name,
-          gender: pn.gender,
+          gender: pn.gender as Gender,
           preferredLanguage: 'urdu',
           preferredModality: 'auto',
           optInMarketing: pi % 3 === 0,
@@ -524,7 +523,7 @@ async function main() {
       const paymentStatus = status === 'completed' ? 'paid' : status === 'cancelled' ? 'refunded' : status === 'no_show' ? 'pending' : 'pending'
 
       const doctorFee = service.baseFee
-      const clinicMarkup = service.clinicMarkup ?? 0
+      const clinicMarkup = 0
       const platformFee = 50
       const total = doctorFee + clinicMarkup + platformFee
 
@@ -536,7 +535,7 @@ async function main() {
           serviceId: service.id,
           start,
           end,
-          status,
+          status: status as AppointmentStatus,
           channel,
           doctorFee,
           platformFee,
@@ -651,8 +650,8 @@ async function main() {
         await db.message.create({
           data: {
             conversationId: conv.id,
-            direction: m.dir,
-            type: (m as { type?: string }).type || 'text',
+            direction: m.dir as MessageDirection,
+            type: ((m as { type?: string }).type || 'text') as MessageType,
             body: m.body,
             transcript: (m as { transcript?: string }).transcript,
             agentGenderUsed: m.dir === 'out' ? clinic.agentGender : null,

@@ -8,6 +8,7 @@
  * This helps finance staff verify payment proofs faster and catches fakes.
  */
 import ZAI from 'z-ai-web-dev-sdk'
+import { db } from './db'
 
 export interface PaymentScreenshotAnalysis {
   detected: boolean
@@ -49,6 +50,7 @@ Only include fields you can clearly see. Be conservative — if something is unc
 
   try {
     const response = await zai.chat.completions.createVision({
+      model: process.env.VLM_MODEL || 'gpt-4o',
       messages: [
         {
           role: 'user',
@@ -163,4 +165,48 @@ export function validatePaymentMatch(
   flags.push(...analysis.suspiciousFlags)
 
   return { valid: flags.length === 0, flags }
+}
+
+/**
+ * Analyze all pending payment proofs that have not been analyzed yet.
+ * Returns a summary count. Used by the finance "Analyze all" endpoint.
+ */
+export async function analyzePendingProofs(): Promise<{ analyzed: number; failed: number; flagged: number }> {
+  const pending = await db.paymentProof.findMany({
+    where: { status: 'pending', vlmAnalyzed: false, screenshotUrl: { not: '' } },
+    orderBy: { createdAt: 'asc' },
+    take: 50,
+  })
+
+  let analyzed = 0
+  let failed = 0
+  let flagged = 0
+
+  for (const proof of pending) {
+    try {
+      const result = await analyzePaymentScreenshot(proof.screenshotUrl)
+      const suspicious = result.suspiciousFlags.length > 0 || result.confidence < 0.5
+
+      await db.paymentProof.update({
+        where: { id: proof.id },
+        data: {
+          vlmAnalyzed: true,
+          vlmConfidence: result.confidence,
+          vlmSuspiciousFlags: JSON.stringify(result.suspiciousFlags),
+          vlmDetectedAmount: result.amount ?? null,
+          vlmDetectedBank: result.bankOrWallet ?? null,
+          vlmAnalysisJson: result.rawAnalysis,
+          needsReview: suspicious,
+        },
+      })
+
+      analyzed++
+      if (suspicious) flagged++
+    } catch (err) {
+      console.error('[vlm:payment] analyzePendingProofs failed for', proof.id, err)
+      failed++
+    }
+  }
+
+  return { analyzed, failed, flagged }
 }

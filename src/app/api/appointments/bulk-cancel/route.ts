@@ -43,7 +43,7 @@ async function bulkCancel(req: NextRequest) {
 
     try {
       // Compute refund based on time-to-appointment
-      const refund = computeRefund(appt.start, appt.paymentStatus, appt.totalFee)
+      const refund = computeRefund(appt.start, appt.totalFee)
 
       // Update appointment
       await db.appointment.update({
@@ -83,7 +83,7 @@ async function bulkCancel(req: NextRequest) {
         clinicId,
         action: 'appointment_cancelled',
         target: appt.id,
-        metadata: JSON.stringify({ reason: body.reason || null, refund, bulk: true }),
+        metadata: { reason: body.reason || null, refund, bulk: true },
       })
 
       results.push({ id: appt.id, ok: true, status: 'cancelled', refund })

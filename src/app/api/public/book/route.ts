@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPhone, last4 } from '@/lib/auth'
+import { encryptPhone } from '@/lib/phone-encryption'
 import { computeFees } from '@/lib/schedule'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
@@ -51,7 +52,7 @@ async function book(req: NextRequest) {
     if (!patient) {
       patient = await db.patient.create({
         data: {
-          clinicId, phoneHash, phoneLast4: last4(patientPhone), phone: patientPhone,
+          clinicId, phoneHash, phoneLast4: last4(patientPhone), phone: encryptPhone(patientPhone),
           name: patientName || null, gender: (patientGender as 'male' | 'female' | 'unknown') || 'unknown',
           preferredLanguage: 'urdu', preferredModality: 'auto',
         },

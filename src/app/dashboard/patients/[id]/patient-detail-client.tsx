@@ -14,7 +14,7 @@ interface Appointment {
   paymentStatus: string; paymentMode: string; checkInTime: Date | null
   doctor: { id: string; name: string; speciality: string }
   service: { name: string } | null
-  fees: { baseDoctorFee: number; extraClinicFee: number; platformFee: number; total: number } | null
+  fees: { baseDoctorFee: number; clinicMarkup: number; platformFee: number; total: number } | null
 }
 interface Conversation { id: string; status: string; lastIntent: string | null; updatedAt: Date; _count: { messages: number } }
 interface Patient {
@@ -229,7 +229,7 @@ export function PatientDetailClient({ patient }: { patient: Patient }) {
                   {a.fees && (
                     <div className="text-xs text-muted-foreground mt-2 pt-2 border-t flex gap-3">
                       <span>Doctor: {a.fees.baseDoctorFee}</span>
-                      <span>Extra: {a.fees.extraClinicFee}</span>
+                      <span>Markup: {a.fees.clinicMarkup}</span>
                       <span>Platform: {a.fees.platformFee}</span>
                     </div>
                   )}
@@ -305,7 +305,7 @@ export function PatientDetailClient({ patient }: { patient: Patient }) {
                 const color = TIMELINE_COLOR[e.type]
                 const lineColor = TIMELINE_LINE[e.type]
                 const isLast = idx === timeline.length - 1
-                const Wrapper = e.href ? Link : 'div'
+                const Wrapper = (e.href ? Link : 'div') as React.ElementType
                 return (
                   <li key={e.id} className="relative pl-10 pb-6 group">
                     {/* Vertical connector line */}

@@ -20,7 +20,6 @@ const routeLabels: Record<string, string> = {
   reminders: 'Reminders',
   'booking-links': 'Booking Links',
   agent: 'Agent Persona',
-  templates: 'Message Templates',
   'quick-replies': 'Quick Replies',
   'bank-accounts': 'Bank Accounts',
   billing: 'Billing & Wallet',

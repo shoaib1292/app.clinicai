@@ -382,7 +382,7 @@ export function OffersClient({ initialOffers, initialReferralProgram, services, 
                 <Label>Referral Link Preview</Label>
                 <div className="flex gap-2">
                   <Input readOnly value={`app.clinicai.pk/r/${clinicSlug}/<code>`} className="font-mono text-sm" />
-                  <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(`app.clinicai.pk/r/${clinicSlug}`); toast.success('Copied') }}>
+                  <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(`https://app.clinicai.pk/r/${clinicSlug}`); toast.success('Copied') }}>
                     <Copy className="w-4 h-4" />
                   </Button>
                 </div>

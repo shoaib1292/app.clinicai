@@ -16,7 +16,6 @@ describe('Schedule Module', () => {
       expect(result.doctorFee).toBe(500)
       expect(result.clinicMarkup).toBe(100)
       expect(result.platformFee).toBe(50)
-      expect(result.appointmentFee).toBe(150)
       expect(result.total).toBe(650)
     })
 
@@ -29,7 +28,6 @@ describe('Schedule Module', () => {
         platformFeeOverride: 30,
       })
       expect(result.platformFee).toBe(30) // override applied
-      expect(result.appointmentFee).toBe(30)
       expect(result.total).toBe(1030)
     })
 
@@ -43,7 +41,6 @@ describe('Schedule Module', () => {
       expect(result.doctorFee).toBe(0)
       expect(result.clinicMarkup).toBe(0)
       expect(result.platformFee).toBe(50)
-      expect(result.appointmentFee).toBe(50)
       expect(result.total).toBe(50)
     })
   })

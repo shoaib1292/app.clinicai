@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClinicScope, auditLog } from '@/lib/session'
+import { decryptPhone } from '@/lib/phone-encryption'
 import { computeRefund } from '@/lib/schedule'
 import { store } from '@/lib/store'
 import { ok, err, handle } from '@/lib/api'
@@ -13,7 +14,7 @@ async function getAppt(_req: NextRequest, { params }: { params: Promise<{ id: st
     include: { patient: true, doctor: true, service: true, fees: true, reminders: true, paymentProof: true },
   })
   if (!appt) return err('Not found', 404)
-  return ok(appt)
+  return ok({ ...appt, patient: { ...appt.patient, phone: decryptPhone(appt.patient.phone) } })
 }
 
 async function patch(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

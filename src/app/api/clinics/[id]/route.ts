@@ -67,12 +67,17 @@ async function patchClinic(req: NextRequest, { params }: { params: Promise<{ id:
   const fieldAllowlist = [
     'name', 'city', 'phone', 'address', 'timezone', 'currency',
     'onlinePaymentsEnabled', 'agentEnabled',
+    'pharmacyEnabled', 'inventoryEnabled', 'combineFees',
+    'workingHours',
     'agentName', 'agentGender', 'agentTone', 'agentLanguages',
     'agentWelcome', 'agentFallback',
     'settlementMode',
   ]
   for (const k of fieldAllowlist) {
-    if (k in body) allowed[k] = body[k]
+    if (k in body) {
+      // workingHours is stored as a JSON string on the Clinic model.
+      allowed[k] = k === 'workingHours' ? JSON.stringify(body[k]) : body[k]
+    }
   }
 
   if (Object.keys(allowed).length === 0) {

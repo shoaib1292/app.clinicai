@@ -90,8 +90,8 @@ export function OnboardingClient({ clinicId, clinicName }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const stepParam = searchParams.get('step')
-  const [step, setStep] = useState(stepParam ? Math.min(Math.max(Number(stepParam), 1), BASE_STEPS + (data.labEnabled ? 1 : 0)) : 1)
   const [data, setData] = useState<OnboardingData>(loadData)
+  const [step, setStep] = useState(stepParam ? Math.min(Math.max(Number(stepParam), 1), BASE_STEPS + (data.labEnabled ? 1 : 0)) : 1)
   const [completing, setCompleting] = useState(false)
 
   const totalSteps = BASE_STEPS + (data.labEnabled ? 1 : 0)

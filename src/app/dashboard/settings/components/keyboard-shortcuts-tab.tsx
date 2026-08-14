@@ -30,7 +30,6 @@ export function getShortcutSections(userType: string): ShortcutSection[] {
         { key: 'b', description: 'Billing & Wallet' },
         { key: 'g', description: 'Agent Chat Test' },
         { key: 'm', description: 'Reminders' },
-        { key: 't', description: 'Message Templates' },
         { key: 'q', description: 'Quick Replies' },
         { key: 'k', description: 'Booking Links' },
         { key: 'e', description: 'Doctor Performance' },

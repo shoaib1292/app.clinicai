@@ -63,7 +63,7 @@ const financeLinks: QuickLink[] = [
   { label: 'Invoices', href: '/dashboard/finance/invoices', icon: CreditCard, group: 'Finance' },
 ]
 
-export function CommandPalette({ userType, open, onOpenChange, enabledFeatures }: { userType: 'platform_admin' | 'platform_staff' | 'clinic_admin' | 'doctor' | 'receptionist'; open: boolean; onOpenChange: (o: boolean) => void; enabledFeatures?: Set<string> }) {
+export function CommandPalette({ userType, open, onOpenChange, enabledFeatures }: { userType: string; open: boolean; onOpenChange: (o: boolean) => void; enabledFeatures?: Set<string> }) {
   const router = useRouter()
 
   const links: QuickLink[] = [

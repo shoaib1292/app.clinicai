@@ -35,7 +35,7 @@ interface NavSection {
 }
 
 export interface DashboardShellProps {
-  userType: 'platform_admin' | 'platform_staff' | 'clinic_admin' | 'doctor' | 'receptionist' | 'pharmacist' | 'lab_admin' | 'accountant'
+  userType: string
   userName: string
   clinicName?: string
   clinicLogoUrl?: string | null
@@ -63,10 +63,11 @@ function organizeNavSections(items: NavItem[], userType: string): NavSection[] {
       { title: 'Finance', labels: ['Payments', 'Credits'] },
     ],
     settings: [
-      { title: 'Clinic', labels: ['Clinic Profile', 'Doctors', 'Staff', 'Services', 'Working Hours', 'Toggles'] },
-      { title: 'Integrations', labels: ['WhatsApp', 'Google'] },
+      { title: 'Settings', labels: ['Settings'] },
+      { title: 'Team', labels: ['Doctors', 'Staff', 'Services'] },
+      { title: 'Integrations', labels: ['WhatsApp'] },
       { title: 'Finance', labels: ['Bank Accounts'] },
-      { title: 'Marketing', labels: ['Booking Links', 'Templates', 'Quick Replies', 'Reminders', 'Branding'] },
+      { title: 'Marketing', labels: ['Booking Links', 'Quick Replies', 'Reminders'] },
       { title: 'Insights', labels: ['Analytics'] },
     ],
     pharmacist: [
@@ -151,21 +152,16 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
   const [mounted, setMounted] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
   const [liveLogoUrl, setLiveLogoUrl] = useState<string | null | undefined>(clinicLogoUrl)
-  const [resolvedFeatures, setResolvedFeatures] = useState<Set<string> | undefined>(enabledFeatures)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   // If the page didn't pass enabledFeatures (most pages), resolve them
   // client-side for clinic-scoped roles so pharmacy tabs respect the toggle
   // without touching every page. Platform roles skip this.
+  const [fetchedFeatures, setFetchedFeatures] = useState<Set<string> | undefined>(undefined)
+  const resolvedFeatures = enabledFeatures ?? fetchedFeatures
   useEffect(() => {
-    if (enabledFeatures) {
-      setResolvedFeatures(enabledFeatures)
-      return
-    }
-    if (userType !== 'clinic_admin' && userType !== 'doctor' && userType !== 'receptionist') {
-      setResolvedFeatures(undefined)
-      return
-    }
+    if (enabledFeatures) return
+    if (userType !== 'clinic_admin' && userType !== 'doctor' && userType !== 'receptionist') return
     let cancelled = false
     ;(async () => {
       try {
@@ -184,7 +180,7 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
             if (!hasRow) set.add(sub)
           }
         }
-        setResolvedFeatures(set)
+        setFetchedFeatures(set)
       } catch {
         /* ignore */
       }
@@ -205,11 +201,7 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
   }, [displayNav, resolvedFeatures])
 
   // Reset collapsed state when mobile Sheet closes (return to desktop)
-  useEffect(() => {
-    if (!open) {
-      setCollapsedSections({})
-    }
-  }, [open])
+  // Handled in the Sheet's onOpenChange handler above — no effect needed.
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 0)
@@ -288,7 +280,6 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
         { key: 'b', description: 'Billing & Wallet', action: () => router.push('/dashboard/billing') },
         { key: 'g', description: 'Agent Chat Test', action: () => router.push('/dashboard/agent-chat') },
         { key: 'm', description: 'Reminders', action: () => router.push('/dashboard/reminders') },
-        { key: 't', description: 'Message Templates', action: () => router.push('/dashboard/clinic/templates') },
         { key: 'q', description: 'Quick Replies', action: () => router.push('/dashboard/clinic/quick-replies') },
         { key: 'k', description: 'Booking Links', action: () => router.push('/dashboard/clinic/booking-links') },
         { key: 'e', description: 'Doctor Performance', action: () => router.push('/dashboard/clinic/doctor-performance') },
@@ -414,26 +405,6 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
         )}
       </div>
 
-      {/* User info */}
-      <div className="px-4 py-3 border-b border-border/60">
-        <div className="flex items-center gap-2.5">
-          <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary shrink-0">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">{userName}</div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Badge variant="secondary" className="text-2xs px-1.5 py-0 h-4">
-                {typeLabel}
-              </Badge>
-            </div>
-          </div>
-        </div>
-        {clinicName && (
-          <div className="text-xs text-muted-foreground mt-1.5 ml-[42px] truncate">{clinicName}</div>
-        )}
-      </div>
-
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-4 overflow-y-auto scroll-thin">
         {sections.map((section, si) => {
@@ -547,7 +518,7 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
             </Button>
           )}
           {/* Mobile menu trigger */}
-          <Sheet open={open} onOpenChange={setOpen}>
+          <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (!o) setCollapsedSections({}) }}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden size-8">
                 <Menu className="size-4" />
@@ -614,7 +585,7 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
                     <div className="text-xs text-muted-foreground">{typeLabel}</div>
                   </div>
                   <Link
-                    href="/settings"
+                    href="/dashboard/settings"
                     onClick={() => setUserMenuOpen(false)}
                     className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-surface-3 hover:text-foreground transition-colors"
                   >
@@ -666,7 +637,7 @@ export const platformAdminNav: NavItem[] = [
   { label: 'Overview', href: '/dashboard/platform', icon: LayoutDashboard },
   { label: 'Clinics', href: '/dashboard/platform/clinics', icon: Building2 },
   { label: 'LLM Keys', href: '/dashboard/platform/llm-keys', icon: KeyRound },
-  { label: 'Evolution API', href: '/dashboard/platform/evolution-keys', icon: Radio },
+  { label: 'WhatsApp Keys', href: '/dashboard/platform/evolution-keys', icon: Radio },
   { label: 'Assembly AI', href: '/dashboard/platform/assembly-ai', icon: Mic },
   { label: 'Pricing Rules', href: '/dashboard/platform/pricing', icon: CreditCard },
   { label: 'Payment Accounts', href: '/dashboard/platform/accounts', icon: Wallet },
@@ -716,21 +687,16 @@ export const accountantNav: NavItem[] = [
 ]
 
 export const settingsNav: NavItem[] = [
-  { label: 'Clinic Profile', href: '/dashboard/settings', icon: Building2 },
+  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
   { label: 'Doctors', href: '/dashboard/settings/doctors', icon: Stethoscope },
   { label: 'Staff', href: '/dashboard/settings/staff', icon: Users },
   { label: 'Services', href: '/dashboard/settings/services', icon: Activity },
   { label: 'WhatsApp', href: '/dashboard/settings/whatsapp', icon: Smartphone },
-  { label: 'Google', href: '/dashboard/settings/google', icon: Globe },
-  { label: 'Working Hours', href: '/dashboard/settings/hours', icon: Clock },
-  { label: 'Toggles', href: '/dashboard/settings/features', icon: ToggleLeft },
   { label: 'Bank Accounts', href: '/dashboard/settings/bank-accounts', icon: Wallet },
   { label: 'Booking Links', href: '/dashboard/settings/booking-links', icon: LinkIcon },
-  { label: 'Templates', href: '/dashboard/settings/templates', icon: MessageSquare },
   { label: 'Quick Replies', href: '/dashboard/settings/quick-replies', icon: Zap },
   { label: 'Reminders', href: '/dashboard/settings/reminders', icon: Bell },
   { label: 'Analytics', href: '/dashboard/settings/analytics', icon: BarChart3 },
-  { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette },
 ]
 
 export const doctorNav: NavItem[] = [

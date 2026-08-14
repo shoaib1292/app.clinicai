@@ -11,6 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Search, ChevronDown, ChevronRight, Users, AlertCircle, Phone, Calendar, Activity, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
+function formatDate(d: Date | string) {
+  const date = new Date(d)
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${date.getFullYear()}`
+}
+
 interface Patient {
   id: string
   name: string | null
@@ -80,16 +87,15 @@ export function PatientsClient({ patients }: { patients: Patient[] }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Patients</h1>
-        <p className="text-muted-foreground">{filtered.length} of {patients.length} patients · click a row for detail</p>
-      </div>
-
-      <Card>
-        <CardContent className="p-4 flex flex-wrap gap-3 items-end">
-          <div className="relative flex-1 min-w-[200px]">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Patients</h1>
+          <p className="text-muted-foreground">{filtered.length} of {patients.length} patients · click a row for detail</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+            <Input placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-64" />
           </div>
           <div className="flex items-center gap-2">
             <Switch id="noshow" checked={noShowOnly} onCheckedChange={setNoShowOnly} />
@@ -97,8 +103,8 @@ export function PatientsClient({ patients }: { patients: Patient[] }) {
               <AlertCircle className="w-3 h-3" />No-shows only
             </Label>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Card>
         <CardContent className="p-0">
@@ -137,7 +143,7 @@ export function PatientsClient({ patients }: { patients: Patient[] }) {
                           {p.noShowCount > 0 ? <Badge variant="destructive" className="text-xs">{p.noShowCount}</Badge> : <span className="text-muted-foreground">0</span>}
                         </TableCell>
                         <TableCell className="text-center text-sm">{p._count.appointments}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleDateString('en-PK')}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{formatDate(p.createdAt)}</TableCell>
                       </TableRow>
                       {isOpen && (
                         <TableRow key={p.id + '-detail'} className="bg-muted/30">

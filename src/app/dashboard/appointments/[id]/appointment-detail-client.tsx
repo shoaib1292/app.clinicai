@@ -26,7 +26,7 @@ interface Patient {
 }
 interface Doctor { id: string; name: string; speciality: string; gender: string; currentStatus: string }
 interface Service { name: string; durationMin: number }
-interface Fees { baseDoctorFee: number; extraClinicFee: number; platformFee: number; platformFeeOverride: number | null; total: number; currency: string }
+interface Fees { baseDoctorFee: number; clinicMarkup: number; platformFee: number; platformFeeOverride: number | null; total: number; currency: string }
 interface Slot { id: string; tokenNo: number | null; startTime: string; endTime: string }
 interface Reminder {
   id: string; type: string; sendAt: string; status: string; channel: string; error: string | null
@@ -49,7 +49,7 @@ interface Appt {
   id: string; clinicId: string; patientId: string; doctorId: string; slotId: string | null
   serviceId: string | null; familyMemberId: string | null
   start: string; end: string; status: string; channel: string
-  doctorFee: number; extraClinicFee: number; platformFee: number; totalFee: number
+  doctorFee: number; clinicMarkup: number; platformFee: number; totalFee: number
   paymentStatus: string; paymentMode: string; createdByStaffId: string | null
   createdVia: string; metaMsgId: string | null; checkInTime: string | null
   notes: string | null; createdAt: string; updatedAt: string
@@ -447,7 +447,7 @@ export function AppointmentDetailClient({ appt, userType }: Props) {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <FeeRow label="Doctor fee" value={appt.doctorFee} />
-              <FeeRow label="Extra clinic fee" value={appt.extraClinicFee} />
+              <FeeRow label="Clinic markup" value={appt.clinicMarkup} />
               <FeeRow label="Platform fee" value={appt.platformFee} />
               <Separator className="my-2" />
               <div className="flex justify-between items-center">

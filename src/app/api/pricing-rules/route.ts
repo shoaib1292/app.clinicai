@@ -15,7 +15,7 @@ async function list() {
 async function create(req: NextRequest) {
   const session = await requireType('platform_admin')
   const body = await req.json()
-  const { scope, clinicId, platformFeeDefault, platformFeeOverride, extraClinicFeeMin, extraClinicFeeMax, billingMode } = body
+  const { scope, clinicId, platformFeeDefault, platformFeeOverride, markupMin, markupMax, billingMode } = body
   if (!scope) return err('Scope required', 400)
   const rule = await db.pricingRule.create({
     data: {
@@ -23,8 +23,8 @@ async function create(req: NextRequest) {
       clinicId: scope === 'clinic' ? clinicId : null,
       platformFeeDefault: platformFeeDefault ?? 50,
       platformFeeOverride: platformFeeOverride ?? null,
-      extraClinicFeeMin: extraClinicFeeMin ?? 0,
-      extraClinicFeeMax: extraClinicFeeMax ?? 500,
+      markupMin: markupMin ?? 0,
+      markupMax: markupMax ?? 500,
       billingMode: billingMode ?? 'credit',
       createdById: session.sub,
     },

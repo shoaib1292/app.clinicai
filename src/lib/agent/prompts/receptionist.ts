@@ -13,6 +13,10 @@ export async function buildReceptionistPrompt(clinicId: string): Promise<string>
 
   const globalPricing = await db.pricingRule.findFirst({ where: { scope: 'global' } })
   const platformFee = clinic.pricingRules[0]?.platformFeeOverride ?? clinic.pricingRules[0]?.platformFeeDefault ?? globalPricing?.platformFeeDefault ?? 50
+  const markupMin = clinic.pricingRules[0]?.markupMin ?? globalPricing?.markupMin ?? 0
+  const markupMax = clinic.pricingRules[0]?.markupMax ?? globalPricing?.markupMax ?? 500
+  const clinicMarkup = Math.min(markupMax, Math.max(markupMin, clinic.pricingRules[0]?.markupDefault ?? globalPricing?.markupDefault ?? 0))
+  const appointmentFee = platformFee + clinicMarkup
 
   const agentGenderGrammar = clinic.agentGender === 'female'
     ? `Use feminine grammar consistently. Examples: 'main karti hoon' (not 'karta hoon'), 'meri appointment' (not 'mera'), 'mujhe maloom hai' (not 'mujhe pata hai'), 'main hun' (not 'hoon'). Always use feminine verbs and pronouns.`

@@ -19,7 +19,7 @@ export default async function SettingsStaffPage() {
   ])
 
   return (
-    <DashboardShell userType={session.type} userName={session.name} navItems={settingsNav} settingsSidebar>
+    <DashboardShell userType={session.type as 'clinic_admin'} userName={session.name} navItems={settingsNav} settingsSidebar>
       <StaffManagementClient
         clinicId={session.clinicId}
         doctors={JSON.parse(JSON.stringify(doctors))}

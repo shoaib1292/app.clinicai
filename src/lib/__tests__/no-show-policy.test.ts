@@ -44,7 +44,6 @@ describe('No-Show Policy', () => {
         patientId: 'patient-warning',
         noShowCount: 2,
         totalVisits: 3,
-        warnAt: 2,
       })
       expect(result.blocked).toBe(false)
       // 2 no-shows are under the 3-no-show block threshold but still flagged

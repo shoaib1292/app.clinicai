@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClinicScope } from '@/lib/session'
+import { decryptPhone } from '@/lib/phone-encryption'
 import { ok, err, handle } from '@/lib/api'
 
 // GET /api/patients/[id] — detail with family + recent appointments
@@ -20,7 +21,7 @@ async function getPatient(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
   if (!patient) return err('Patient not found', 404)
-  return ok(patient)
+  return ok({ ...patient, phone: decryptPhone(patient.phone) })
 }
 
 export const GET = handle(getPatient)

@@ -21,11 +21,11 @@ interface LedgerEntry {
 }
 interface Invoice {
   id: string; periodStart: Date; periodEnd: Date; totalAppointments: number;
-  platformFeeTotal: number; extraClinicFeeTotal: number; metaCostTotal: number; status: string
+  platformFeeTotal: number; clinicMarkupTotal: number; metaCostTotal: number; status: string
 }
 interface BankAccount {
   id: string; bankName: string; accountTitle: string; accountNumber: string;
-  walletType: string | null; walletNumber: string | null; isDefault: boolean
+  iban: string | null; walletType: string | null; walletNumber: string | null; isDefault: boolean
 }
 
 const INVOICE_STATUS: Record<string, 'default' | 'secondary' | 'destructive'> = {
@@ -212,7 +212,7 @@ export function BillingClient({ clinic, ledger, invoices, bankAccounts }: {
                     <TableHead>Period</TableHead>
                     <TableHead className="text-right">Appts</TableHead>
                     <TableHead className="text-right">Platform Fee</TableHead>
-                    <TableHead className="text-right">Extra</TableHead>
+                    <TableHead className="text-right">Markup</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -224,7 +224,7 @@ export function BillingClient({ clinic, ledger, invoices, bankAccounts }: {
                       </TableCell>
                       <TableCell className="text-right">{i.totalAppointments}</TableCell>
                       <TableCell className="text-right">PKR {i.platformFeeTotal.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">PKR {i.extraClinicFeeTotal.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">PKR {i.clinicMarkupTotal.toLocaleString()}</TableCell>
                       <TableCell className="text-center"><Badge variant={INVOICE_STATUS[i.status] || 'secondary'} className="text-xs capitalize">{i.status}</Badge></TableCell>
                     </TableRow>
                   ))}

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { store } from '@/lib/store'
 import { hashPhone } from '@/lib/auth'
 import { normalizePhone } from '@/lib/phone-utils'
+import { encryptPhone } from '@/lib/phone-encryption'
 import { createPatientSession } from '@/lib/patient-session'
 import { PATIENT_SESSION_COOKIE } from '@/lib/patient-cookie-session'
 import { db } from '@/lib/db'
@@ -67,7 +68,7 @@ async function login(req: NextRequest) {
     await db.patient.create({
       data: {
         clinicId: clinic.id,
-        phone: appUser.phone,
+        phone: encryptPhone(appUser.phone),
         phoneHash,
         phoneLast4: phone.slice(-4),
         appUserId: appUser.id,

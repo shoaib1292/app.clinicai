@@ -25,7 +25,6 @@ interface Service {
   id: string
   name: string
   baseFee: number
-  extraClinicFee: number
   doctorId: string | null
 }
 
@@ -59,7 +58,7 @@ export function BookClient({ doctors, services }: { doctors: Doctor[]; services:
   const selectedSlot = slots.find((s) => s.id === slotId)
   const service = services.find((s) => s.doctorId === doctorId) || services[0]
   const fees = service
-    ? { doctorFee: service.baseFee, extraClinicFee: service.extraClinicFee, platformFee: 50, total: service.baseFee + service.extraClinicFee + 50 }
+    ? { doctorFee: service.baseFee, platformFee: 50, total: service.baseFee + 50 }
     : null
 
   async function fetchSlots() {
@@ -168,7 +167,7 @@ export function BookClient({ doctors, services }: { doctors: Doctor[]; services:
                 <div className="p-3 rounded-md bg-muted/50 text-sm">
                   <span className="text-muted-foreground">Default service:</span>{' '}
                   <span className="font-medium">{service.name}</span>{' '}
-                  <Badge variant="outline" className="text-xs">PKR {service.baseFee + service.extraClinicFee}+50</Badge>
+                  <Badge variant="outline" className="text-xs">PKR {service.baseFee}+50</Badge>
                 </div>
               )}
             </div>
@@ -278,7 +277,6 @@ export function BookClient({ doctors, services }: { doctors: Doctor[]; services:
                 <Card className="bg-muted/30">
                   <CardContent className="p-4 space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Doctor fee</span><span>PKR {fees.doctorFee}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Extra clinic fee</span><span>PKR {fees.extraClinicFee}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Platform fee</span><span>PKR {fees.platformFee}</span></div>
                     <div className="flex justify-between font-semibold pt-1 border-t mt-1"><span>Total</span><span>PKR {fees.total}</span></div>
                   </CardContent>

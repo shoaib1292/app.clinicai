@@ -12,7 +12,7 @@ async function confirm(req: NextRequest, { params }: { params: Promise<{ id: str
   const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
 
   let session
-  let clinicId: string
+  let clinicId: string | undefined
 
   // Allow platform finance/admin OR clinic-scoped (clinic_admin/receptionist)
   try {

@@ -12,7 +12,7 @@ import { CheckCircle2, Loader2, ArrowRight, ArrowLeft, Phone, User, Stethoscope,
 import { toast } from 'sonner'
 
 interface Clinic { id: string; name: string; city: string | null; agentName: string; onlinePaymentsEnabled: boolean }
-interface Service { id: string; name: string; baseFee: number; extraClinicFee: number; durationMin: number }
+interface Service { id: string; name: string; baseFee: number; durationMin: number }
 interface Doctor {
   id: string; name: string; speciality: string; gender: string; slotDurationMin: number; queueMode: string
   services: Service[]
@@ -55,9 +55,8 @@ export function PublicBookingClient({
   const selectedService = allDoctorServices.find((s) => s.id === serviceId)
   const platformFee = 50
   const doctorFee = selectedService?.baseFee ?? 0
-  const extraFee = selectedService?.extraClinicFee ?? 0
   const discountAmount = appliedDiscount?.amount ?? 0
-  const totalFee = Math.max(0, doctorFee + extraFee + platformFee - discountAmount)
+  const totalFee = Math.max(0, doctorFee + platformFee - discountAmount)
 
   // Fetch month availability for calendar dots
   const fetchAvailability = useCallback(async (month: number, year: number) => {
@@ -98,6 +97,8 @@ export function PublicBookingClient({
   }, [doctorId, selectedMonth, selectedYear])
 
   useEffect(() => {
+    // setState happens after await inside fetchAvailability — async callback, not sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAvailability(selectedMonth, selectedYear)
   }, [selectedMonth, selectedYear, fetchAvailability])
 
@@ -440,7 +441,6 @@ export function PublicBookingClient({
 
               <div className="space-y-2 text-sm mb-4">
                 <div className="flex justify-between"><span>Doctor fee</span><span>PKR {doctorFee}</span></div>
-                {extraFee > 0 && <div className="flex justify-between"><span>Extra clinic fee</span><span>PKR {extraFee}</span></div>}
                 <div className="flex justify-between"><span>Platform fee</span><span>PKR {platformFee}</span></div>
                 {discountAmount > 0 && <div className="flex justify-between text-chart-2"><span>Discount</span><span>-PKR {discountAmount}</span></div>}
                 <div className="flex justify-between font-bold border-t pt-2"><span>Total</span><span>PKR {totalFee}</span></div>

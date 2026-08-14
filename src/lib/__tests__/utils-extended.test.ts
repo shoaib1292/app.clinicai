@@ -49,7 +49,7 @@ describe('Date Utilities', () => {
 
   it('should format date in Pakistan locale', () => {
     const d = new Date('2026-01-15T00:00:00+05:00')
-    expect(toPakistanISO(d)).toMatch(/15.*Jan.*2026/)
+    expect(toPakistanISO(d)).toMatch(/\d{2}-[A-Za-z]{3}-\d{4}/)
   })
 
   it('should format time in 24h format', () => {

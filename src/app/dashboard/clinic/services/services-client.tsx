@@ -18,7 +18,6 @@ interface Service {
   name: string
   durationMin: number
   baseFee: number
-  extraClinicFee: number
   description: string | null
   active: boolean
   doctor: { id: string; name: string } | null
@@ -26,7 +25,7 @@ interface Service {
   createdAt: Date
 }
 
-const EMPTY_FORM = { name: '', durationMin: '15', baseFee: '0', extraClinicFee: '0', doctorId: '', description: '' }
+const EMPTY_FORM = { name: '', durationMin: '15', baseFee: '0', doctorId: '', description: '' }
 
 export function ServicesClient({ services, doctors }: { services: Service[]; doctors: Doctor[] }) {
   const [list, setList] = useState(services)
@@ -43,7 +42,6 @@ export function ServicesClient({ services, doctors }: { services: Service[]; doc
         name: form.name,
         durationMin: Number(form.durationMin),
         baseFee: Number(form.baseFee),
-        extraClinicFee: Number(form.extraClinicFee),
         doctorId: form.doctorId || undefined,
         description: form.description || undefined,
       }),
@@ -70,14 +68,14 @@ export function ServicesClient({ services, doctors }: { services: Service[]; doc
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Service</DialogTitle>
-              <DialogDescription>Fees are in PKR. Patient pays base + extra + platform fee.</DialogDescription>
+              <DialogDescription>Fees are in PKR. Patient pays base + platform fee.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3 py-2">
               <div className="space-y-2">
                 <Label>Service Name</Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Consultation" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Duration (min)</Label>
                   <Input type="number" value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: e.target.value })} />
@@ -85,10 +83,6 @@ export function ServicesClient({ services, doctors }: { services: Service[]; doc
                 <div className="space-y-2">
                   <Label>Base Fee (PKR)</Label>
                   <Input type="number" value={form.baseFee} onChange={(e) => setForm({ ...form, baseFee: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Extra Clinic Fee</Label>
-                  <Input type="number" value={form.extraClinicFee} onChange={(e) => setForm({ ...form, extraClinicFee: e.target.value })} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -127,10 +121,9 @@ export function ServicesClient({ services, doctors }: { services: Service[]; doc
                 </div>
                 <Badge variant={s.active ? 'default' : 'secondary'} className="text-xs">{s.active ? 'Active' : 'Disabled'}</Badge>
               </div>
-              <div className="grid grid-cols-3 gap-1 text-xs text-muted-foreground">
+              <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                 <div><div className="text-foreground font-medium">{s.durationMin}m</div>Duration</div>
                 <div><div className="text-foreground font-medium">PKR {s.baseFee}</div>Doctor fee</div>
-                <div><div className="text-foreground font-medium">PKR {s.extraClinicFee}</div>Extra fee</div>
               </div>
               {s.description && <div className="text-xs text-muted-foreground line-clamp-2">{s.description}</div>}
               <div className="text-xs text-muted-foreground">{s._count.appointments} appointment{s._count.appointments !== 1 ? 's' : ''} booked</div>

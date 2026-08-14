@@ -2,7 +2,7 @@ import { google, calendar_v3 } from 'googleapis'
 import type {
   CalendarProvider, CreateEventParams, UpdateEventParams,
   CalendarEventResult, BusySlotQuery, BusySlot, WatchResult,
-} from './types'
+} from '../types'
 import { getOAuth2Client } from '@/lib/google-token-manager'
 import { db } from '@/lib/db'
 import crypto from 'crypto'

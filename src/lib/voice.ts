@@ -43,6 +43,10 @@ export async function transcribeAudio(
   audioBase64: string,
   _mimeType?: string
 ): Promise<{ text: string; error?: string }> {
+  if (!audioBase64) {
+    return { text: '', error: 'Empty audio data' }
+  }
+
   const apiKey = await getSttApiKey()
   if (!apiKey) {
     return { text: '', error: 'ASSEMBLYAI_API_KEY not configured' }
@@ -51,6 +55,10 @@ export async function transcribeAudio(
   try {
     // Step 1: Upload audio
     const audioBuffer = Buffer.from(audioBase64, 'base64')
+    if (audioBuffer.length < 64) {
+      return { text: '', error: 'Audio data too small to be a valid recording' }
+    }
+
     const uploadRes = await fetch(ASSEMBLYAI_UPLOAD, {
       method: 'POST',
       headers: {
@@ -196,9 +204,9 @@ export function getVoiceForGender(gender: string | null): string {
  * reply language.
  */
 export function detectLanguage(text: string): string {
-  if (!text) return 'roman-urdu'
+  if (!text) return 'urdu'
 
-  const urduRange = /[\u0600-\u06FF]/
+  const urduRange = /[\u0600-\u06FF]/g
   const urduChars = text.match(urduRange)
   if (urduChars && urduChars.length >= text.replace(/\s/g, '').length * 0.25) {
     return 'urdu'

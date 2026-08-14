@@ -35,16 +35,13 @@ function parseWorkingHours(raw: string | null | undefined): WorkingHours {
 }
 
 export function ScheduleEditor({
-  value,
+  hours,
   onChange,
 }: {
-  value: string | null
+  hours: WorkingHours
   onChange: (next: WorkingHours) => void
 }) {
-  const [hours, setHours] = useState<WorkingHours>(() => parseWorkingHours(value))
-
   function update(next: WorkingHours) {
-    setHours(next)
     onChange(next)
   }
 
@@ -213,7 +210,7 @@ export function WorkingHoursTab({
         <h2 className="text-lg font-semibold">Clinic Working Hours</h2>
         <p className="text-sm text-muted-foreground">Set your clinic&apos;s default availability and breaks. These act as the base schedule; a doctor&apos;s own weekly hours override them per day.</p>
       </div>
-      <ScheduleEditor value={initialValue} onChange={setHours} />
+      <ScheduleEditor hours={hours} onChange={setHours} />
       <div className="flex justify-end">
         <Button onClick={save} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}

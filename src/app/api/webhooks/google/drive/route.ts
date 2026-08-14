@@ -37,7 +37,7 @@ export const POST = handle(async (req: NextRequest) => {
 
     // List recent changes — Google Drive push notifications don't include
     // the actual changed file IDs, so we do a lightweight metadata refresh
-    const files = await provider.listFiles('root', { pageSize: 100 })
+    const files = await provider.listFiles({ limit: 100 })
 
     // Sync metadata to local DB
     for (const file of files) {

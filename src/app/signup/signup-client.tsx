@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PhoneField } from '@/components/ui/phone-field'
@@ -20,11 +20,11 @@ const images = [
   'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=900&auto=format&fit=crop&q=60',
 ]
 
-const formVariants = {
+const formVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.15 } },
 }
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 14, opacity: 0 },
   visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 120, damping: 12 } },
 }

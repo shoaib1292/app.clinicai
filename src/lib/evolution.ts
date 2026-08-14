@@ -181,7 +181,7 @@ export async function getEvolutionQR(instanceName: string): Promise<{ qrCode: st
 /**
  * Send a text message via Evolution API.
  */
-export async function sendEvolutionMessage(instanceName: string, to: string, text: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendEvolutionMessage(instanceName: string, to: string, text: string, _opts?: { typingMs?: number }): Promise<{ ok: boolean; error?: string }> {
   const { baseUrl, apiKey } = await resolveEvoCredentials()
   if (!baseUrl) {
     console.log(`[evo:send] ${instanceName} → ${to}: ${text.slice(0, 80)}...`)

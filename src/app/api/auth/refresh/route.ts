@@ -82,7 +82,7 @@ async function refresh(req: NextRequest) {
   headers.append('Set-Cookie', `${SESSION_COOKIE}=${newAccessToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=900`)
   headers.append('Set-Cookie', `${REFRESH_COOKIE}=${newRefreshToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`)
 
-  return ok({ refreshed: true }, headers)
+  return ok({ refreshed: true }, { headers })
 }
 
 export const POST = handle(refresh)

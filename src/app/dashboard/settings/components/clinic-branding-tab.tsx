@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,8 +52,9 @@ interface BrandingTabProps {
   }>
 }
 
-export function ClinicBrandingTab({ clinicId, initialData, doctors }: BrandingTabProps) {
+export function ClinicBrandingTab({ clinicId, initialData, doctors: initialDoctors }: BrandingTabProps) {
   const [saving, setSaving] = useState(false)
+  const [doctors, setDoctors] = useState(initialDoctors)
   const [brandColor, setBrandColor] = useState(initialData.brandColor || '#111111')
   const [headingFont, setHeadingFont] = useState(initialData.headingFont || 'Inter')
   const [bodyFont, setBodyFont] = useState(initialData.bodyFont || 'Inter')
@@ -84,8 +85,10 @@ export function ClinicBrandingTab({ clinicId, initialData, doctors }: BrandingTa
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
       const json = await res.json()
       if (json.error) { toast.error(json.error); return }
+      const key = json.imageKey
+      if (!key) { toast.error('Upload failed — no image key returned'); return }
       toast.success('Logo uploaded')
-      window.dispatchEvent(new CustomEvent('clinic-logo-updated', { detail: json.imageKey }))
+      window.dispatchEvent(new CustomEvent('clinic-logo-updated', { detail: key }))
     } catch { toast.error('Upload failed') }
     finally { setUploadingLogo(false) }
   }
@@ -100,12 +103,34 @@ export function ClinicBrandingTab({ clinicId, initialData, doctors }: BrandingTa
           brandColor, headingFont, bodyFont, tagline, description,
           agentName, agentGender, agentTone, agentLanguages, agentWelcome, agentFallback,
           clinicStats: JSON.stringify(stats),
+          doctors,
         }),
       })
       const json = await res.json()
       if (json.error) { toast.error(json.error) } else { toast.success('Branding saved') }
     } catch { toast.error('Save failed') }
     finally { setSaving(false) }
+  }
+
+  function patchDoctor(id: string, patch: Partial<typeof doctors[number]>) {
+    setDoctors((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
+  }
+
+  async function uploadDoctorPhoto(doctorId: string, file: File) {
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('type', 'doctor')
+      fd.append('doctorId', doctorId)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (json.error) { toast.error(json.error); return }
+      if (json.imageKey) {
+        patchDoctor(doctorId, { imageKey: json.imageKey })
+        await save()
+      }
+      toast.success('Doctor photo uploaded')
+    } catch { toast.error('Upload failed') }
   }
 
   return (
@@ -249,22 +274,22 @@ export function ClinicBrandingTab({ clinicId, initialData, doctors }: BrandingTa
                 </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Show on website</Label>
-                  <Switch checked={doc.displayOnWebsite} />
+                  <Switch checked={doc.displayOnWebsite} onCheckedChange={(v) => patchDoctor(doc.id, { displayOnWebsite: v })} />
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3">
                 <div>
                   <Label className="text-xs">Bio</Label>
-                  <Textarea rows={2} defaultValue={doc.bio || ''} placeholder="Brief professional bio" className="text-sm" />
+                  <Textarea rows={2} value={doc.bio || ''} onChange={(e) => patchDoctor(doc.id, { bio: e.target.value })} placeholder="Brief professional bio" className="text-sm" />
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Languages</Label>
-                    <Input defaultValue={doc.languages || ''} placeholder="urdu,english" className="text-sm" />
+                    <Input value={doc.languages || ''} onChange={(e) => patchDoctor(doc.id, { languages: e.target.value })} placeholder="urdu,english" className="text-sm" />
                   </div>
                   <div>
                     <Label className="text-xs">Photo</Label>
-                    <Input type="file" accept="image/*" className="text-sm" />
+                    <Input type="file" accept="image/*" className="text-sm" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoctorPhoto(doc.id, f) }} />
                     <p className="text-[10px] text-muted-foreground mt-1">Need transparent background? Use <a href="https://remove.bg" target="_blank" rel="noopener" className="underline">remove.bg</a></p>
                   </div>
                 </div>

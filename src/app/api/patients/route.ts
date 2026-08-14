@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClinicScope } from '@/lib/session'
+import { decryptPhone } from '@/lib/phone-encryption'
 import { ok, err, handle } from '@/lib/api'
 
 // GET /api/patients?search=&noShowOnly=
@@ -16,7 +17,6 @@ async function list(req: NextRequest) {
   if (search) {
     where.OR = [
       { name: { contains: search } },
-      { phone: { contains: search } },
       { phoneLast4: { contains: search } },
     ]
   }
@@ -28,11 +28,11 @@ async function list(req: NextRequest) {
     include: { _count: { select: { appointments: true, familyMembers: true, conversations: true } } },
   })
 
-  // Strip sensitive phone hash from response
+  // Decrypt phone for authorized clinic staff; phoneHash stays server-side only.
   return ok(patients.map((p) => ({
     id: p.id,
     name: p.name,
-    phone: p.phone,
+    phone: decryptPhone(p.phone),
     phoneLast4: p.phoneLast4,
     gender: p.gender,
     preferredLanguage: p.preferredLanguage,

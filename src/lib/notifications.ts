@@ -7,6 +7,7 @@
  */
 import crypto from 'crypto'
 import { resolveEmailProvider } from '@/lib/providers/registry'
+import { db } from './db'
 
 // ── Email Templates ──────────────────────────────────────────────────────────
 
@@ -158,6 +159,43 @@ export async function sendEmail(
 
     return { ok: false, error: String(err) }
   }
+}
+
+// ── WhatsApp ────────────────────────────────────────────────────────────────
+
+/**
+ * Send a plain WhatsApp text message to a patient/staff number for a clinic.
+ * Resolves the clinic's active channel: Evolution API first, then Meta Cloud API.
+ */
+export async function sendWhatsAppText(
+  clinicId: string,
+  to: string,
+  text: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const clinic = await db.clinic.findUnique({
+    where: { id: clinicId },
+    select: { evolutionConnected: true, evolutionInstance: true, metaConnected: true, metaPhoneId: true },
+  })
+
+  if (clinic?.evolutionConnected && clinic.evolutionInstance) {
+    const { sendEvolutionMessage } = await import('@/lib/evolution')
+    return sendEvolutionMessage(clinic.evolutionInstance, to, text)
+  }
+
+  if (clinic?.metaConnected && clinic.metaPhoneId) {
+    const { sendMetaMessage, decryptMetaToken } = await import('@/lib/meta')
+    const conn = await db.whatsAppConnection.findFirst({
+      where: { clinicId, mode: 'meta', status: 'connected' },
+      select: { metaTokenEnc: true },
+    })
+    const accessToken = conn?.metaTokenEnc ? decryptMetaToken(conn.metaTokenEnc) : ''
+    if (accessToken) {
+      return sendMetaMessage(clinic.metaPhoneId, accessToken, to, text)
+    }
+  }
+
+  console.log(`[whatsapp:sandbox] clinic=${clinicId} → ${to}: ${text.slice(0, 80)}...`)
+  return { ok: true }
 }
 
 // ── Notification Dispatch ───────────────────────────────────────────────────

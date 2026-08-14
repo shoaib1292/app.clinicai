@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 
 describe('Tool Definitions', () => {
-  it('should export exactly 13 tools', async () => {
+  it('should export exactly 15 tools', async () => {
     const { TOOLS } = await import('../tools-defs')
-    expect(TOOLS).toHaveLength(13)
+    expect(TOOLS).toHaveLength(15)
   })
 
   it('should have required tools for booking flow', async () => {

@@ -1,15 +1,16 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { db } from '@/lib/db'
-import { getClinicFeatures } from '@/lib/features'
-import { DashboardShell, clinicAdminNav, settingsNav } from '@/components/dashboard-shell'
+import { DashboardShell, settingsNav, clinicAdminNav } from '@/components/dashboard-shell'
 import { SettingsClient } from './settings-client'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await getSession()
   if (!session) redirect('/login')
+  const params = await searchParams
+  const tab = typeof params.tab === 'string' ? params.tab : undefined
 
   if (session.type === 'clinic_admin' && session.clinicId) {
     const clinic = await db.clinic.findUnique({
@@ -17,7 +18,7 @@ export default async function SettingsPage() {
       select: {
         id: true, name: true, city: true, phone: true, whatsappNumber: true, address: true,
         timezone: true, currency: true,
-        onlinePaymentsEnabled: true, agentEnabled: true, pharmacyEnabled: true, inventoryEnabled: true,
+        onlinePaymentsEnabled: true, agentEnabled: true, pharmacyEnabled: true, inventoryEnabled: true, combineFees: true,
         logoUrl: true, logoKey: true, workingHours: true,
         tagline: true, description: true, brandColor: true, headingFont: true, bodyFont: true,
         latitude: true, longitude: true,
@@ -34,18 +35,9 @@ export default async function SettingsPage() {
 
     const brandingData = { ...clinic, doctors }
 
-    const feat = await getClinicFeatures(session.clinicId)
-    const subFeatures: Record<string, boolean> = {}
-    if (feat.pharmacyEnabled) {
-      for (const sub of ['inventory', 'suppliers', 'prescriptions', 'counter', 'reports']) {
-        const enabled = feat.features[sub]?.enabled ?? true
-        subFeatures[sub] = enabled
-      }
-    }
-
     return (
       <DashboardShell userType="clinic_admin" userName={session.name} clinicName={clinic.name} clinicLogoUrl={clinic.logoUrl} navItems={settingsNav} settingsSidebar>
-        <SettingsClient clinic={clinic} userType="clinic_admin" subFeatures={subFeatures} brandingData={brandingData} />
+        <SettingsClient clinic={clinic} userType="clinic_admin" brandingData={brandingData} initialTab={tab} />
       </DashboardShell>
     )
   }

@@ -789,28 +789,16 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
 
       const appt = await db.appointment.findUnique({
         where: { id: apptId, clinicId },
-        select: { id: true, status: true, start: true, reminderNeeded: true },
+        select: { id: true, status: true, start: true },
       })
       if (!appt) return JSON.stringify({ error: 'Appointment not found' })
       if (appt.status === 'cancelled') return JSON.stringify({ error: 'Appointment already cancelled' })
-      if (appt.reminderNeeded !== null) return JSON.stringify({ error: 'Reminder preference already set for this appointment' })
 
       let leadMs: number
       if (leadTime === '1d' || leadTime === '24h') leadMs = 24 * 60 * 60 * 1000
       else if (leadTime === '2h') leadMs = 2 * 60 * 60 * 1000
       else if (leadTime === '1h') leadMs = 60 * 60 * 1000
       else leadMs = 30 * 60 * 1000
-
-      const reason: string | null = wantReminder ? 'user_requested' : null
-
-      await db.appointment.update({
-        where: { id: apptId },
-        data: {
-          reminderNeeded: wantReminder,
-          reminderReason: reason,
-          reminderLeadTime: leadTime,
-        },
-      })
 
       if (wantReminder) {
         const sendAt = new Date(appt.start.getTime() - leadMs)

@@ -10,7 +10,7 @@ export default async function WebsiteNotFound() {
   // Extract slug from rewrite path: /website/<slug>/...
   const slug = pathname.match(/^\/website\/([^/]+)/)?.[1] || null
 
-  let clinic = null
+  let clinic: { id: string; name: string; slug: string; city: string | null; logoUrl: string | null; logoKey: string | null; brandColor: string | null; websiteEnabled: boolean } | null = null
   if (slug) {
     clinic = await db.clinic.findUnique({
       where: { slug },

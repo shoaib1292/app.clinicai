@@ -105,6 +105,8 @@ livekit.yaml
 GOOGLE_SETUP_GUIDE.md
 
 # ===== scratch text/debug output (one-off) =====
+devlog.txt
+devlog2.txt
 dev-final.txt
 dev-log.txt
 dev-log2.txt

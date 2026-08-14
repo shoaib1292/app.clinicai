@@ -55,7 +55,6 @@ server.log
 # ===== temp / debug artifacts =====
 *.bak
 *.tgz
-bun.lock
 metro-bundle.js
 .DS_Store
 *.pem

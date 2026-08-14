@@ -12,6 +12,7 @@ RUN bun install --frozen-lockfile
 
 # Copy application source
 COPY tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs ./
+COPY sentry.client.config.ts sentry.edge.config.ts sentry.server.config.ts ./
 COPY src/ ./src/
 COPY public/ ./public/
 COPY components.json ./

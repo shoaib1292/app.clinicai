@@ -31,6 +31,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Install curl for Coolify healthcheck + ca-certificates for TLS
+RUN apt-get update -qq && \
+    apt-get install -qq --no-install-recommends curl ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
 RUN groupadd --gid 1001 nodejs && \
     useradd --uid 1001 --gid 1001 --no-create-home --shell /bin/sh nextjs

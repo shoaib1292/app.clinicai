@@ -8,13 +8,21 @@ export function cookieSecure(req: NextRequest): boolean {
 }
 
 // AES-256-GCM encryption for secrets at rest (LLM keys, Meta tokens, bank accounts)
-const ENC_KEY = process.env.APP_ENCRYPTION_KEY
-if (!ENC_KEY) throw new Error('APP_ENCRYPTION_KEY environment variable is required')
-const KEY_BUFFER = Buffer.from(ENC_KEY.slice(0, 32).padEnd(32, '\x00'), 'utf8')
+let KEY_BUFFER: Buffer | null = null
+
+function getKeyBuffer(): Buffer {
+  if (!KEY_BUFFER) {
+    const encKey = process.env.APP_ENCRYPTION_KEY
+    if (!encKey) throw new Error('APP_ENCRYPTION_KEY environment variable is required')
+    KEY_BUFFER = Buffer.from(encKey.slice(0, 32).padEnd(32, '\x00'), 'utf8')
+  }
+  return KEY_BUFFER
+}
 
 export function encrypt(plaintext: string): string {
+  const key = getKeyBuffer()
   const iv = crypto.randomBytes(12)
-  const cipher = crypto.createCipheriv('aes-256-gcm', KEY_BUFFER, iv)
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
   const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
   return Buffer.concat([iv, tag, enc]).toString('base64')
@@ -22,11 +30,12 @@ export function encrypt(plaintext: string): string {
 
 export function decrypt(ciphertext: string): string {
   try {
+    const key = getKeyBuffer()
     const data = Buffer.from(ciphertext, 'base64')
     const iv = data.subarray(0, 12)
     const tag = data.subarray(12, 28)
     const enc = data.subarray(28)
-    const decipher = crypto.createDecipheriv('aes-256-gcm', KEY_BUFFER, iv)
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
     decipher.setAuthTag(tag)
     return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8')
   } catch {

@@ -1,14 +1,14 @@
 # ── Stage 1: Install dependencies + Build ──
-FROM oven/bun:1 AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
 # Copy package manifests
-COPY package.json bun.lock ./
+COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 
 # Install ALL dependencies (including devDependencies for build)
-RUN bun install --frozen-lockfile
+RUN npm ci --legacy-peer-deps
 
 # Copy application source
 COPY tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs ./
@@ -18,22 +18,22 @@ COPY public/ ./public/
 COPY components.json ./
 
 # Generate Prisma client
-RUN bunx prisma generate
+RUN npx prisma generate
 
 # Build Next.js standalone
-RUN bun run build
+RUN npm run build
 
 # ── Stage 2: Production runtime ──
-FROM oven/bun:1 AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install curl for Coolify healthcheck + ca-certificates for TLS
+# Install curl for Coolify healthcheck + ca-certificates for TLS + passwd for useradd
 RUN apt-get update -qq && \
-    apt-get install -qq --no-install-recommends curl ca-certificates && \
+    apt-get install -qq --no-install-recommends curl ca-certificates passwd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -61,4 +61,4 @@ EXPOSE 3000
 
 ENV PORT=3000
 
-CMD ["bun", "server.js"]
+CMD ["node", "server.js"]

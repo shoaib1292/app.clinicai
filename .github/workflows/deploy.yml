@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
 
 env:
   REGISTRY: ghcr.io
@@ -158,8 +160,6 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    schedule:
-      - cron: '0 2 * * *'  # Daily at 2 AM
     steps:
       - name: SSH and backup database
         uses: appleboy/ssh-action@v1

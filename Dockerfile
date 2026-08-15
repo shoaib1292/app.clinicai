@@ -46,12 +46,19 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy Prisma schema + client for runtime migrations
+# Copy Prisma schema + client + CLI for runtime migrations
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 # Copy .env.example as reference (real .env mounted at runtime)
 COPY .env.example .env.example
+
+# Entrypoint applies DB schema then starts the server
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
 RUN chown -R nextjs:nodejs /app
 
@@ -61,4 +68,4 @@ EXPOSE 3000
 
 ENV PORT=3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

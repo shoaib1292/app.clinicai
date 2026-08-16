@@ -47,22 +47,20 @@ RUN groupadd --gid 1001 nodejs && \
     useradd --uid 1001 --gid 1001 --no-create-home --shell /bin/sh nextjs
 
 # Copy standalone build output
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Copy Prisma schema + generated client for runtime
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy .env.example as reference (real .env mounted at runtime)
-COPY .env.example .env.example
+COPY --chown=nextjs:nodejs .env.example .env.example
 
 # Entrypoint binds to 0.0.0.0 then starts the server
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
-
-RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 

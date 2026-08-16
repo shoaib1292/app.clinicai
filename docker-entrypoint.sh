@@ -1,7 +1,7 @@
 #!/bin/sh
-
-echo "Applying database schema (best-effort)..."
-node /app/node_modules/prisma/build/index.js db push --accept-data-loss --skip-generate 2>&1 || echo "db push skipped (will retry on next deploy)"
+# Next.js standalone binds to process.env.HOSTNAME, which Docker sets to the
+# container ID. Force 0.0.0.0 so the server is reachable from Traefik.
+export HOSTNAME=0.0.0.0
 
 echo "Starting Next.js server..."
 exec node /app/server.js

@@ -20,6 +20,11 @@ COPY components.json ./
 # Generate Prisma client
 RUN npx prisma generate
 
+# Apply DB schema (DB is reachable from Coolify's build network via --network host + --add-host)
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+RUN npx prisma db push --accept-data-loss --skip-generate
+
 # Build Next.js standalone
 RUN npm run build
 
@@ -46,17 +51,14 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy Prisma schema + client + CLI for runtime migrations
+# Copy Prisma schema + generated client for runtime
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 # Copy .env.example as reference (real .env mounted at runtime)
 COPY .env.example .env.example
 
-# Entrypoint applies DB schema then starts the server
+# Entrypoint binds to 0.0.0.0 then starts the server
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 

@@ -13,6 +13,7 @@ import type { ConnectionOptions } from 'bullmq'
 import { db } from '../src/lib/db'
 import { sendMetaMessage, decryptMetaToken } from '../src/lib/meta'
 import { decryptPhone } from '../src/lib/phone-encryption'
+import { resolveEvoCredentials } from '../src/lib/evolution'
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379'
 
@@ -86,8 +87,7 @@ async function sendCampaign(job: { data: { campaignId: string } }) {
       let error: string | null = null
 
       if (campaign.clinic.evolutionConnected) {
-        const evoUrl = process.env.EVOLUTION_API_URL
-        const evoKey = process.env.EVOLUTION_API_KEY
+        const { baseUrl: evoUrl, apiKey: evoKey } = await resolveEvoCredentials()
         if (evoUrl && evoKey && campaign.clinic.evolutionInstance) {
           const res = await fetch(`${evoUrl}/message/sendText/${campaign.clinic.evolutionInstance}`, {
             method: 'POST',

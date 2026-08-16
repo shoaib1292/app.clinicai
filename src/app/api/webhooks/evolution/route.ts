@@ -5,7 +5,7 @@ import { hashPhone } from '@/lib/auth'
 import { encryptPhone } from '@/lib/phone-encryption'
 import { runAgent } from '@/lib/agent'
 import { filterInboundMessage, logFilteredMessage, isDuplicateMessage } from '@/lib/filter'
-import { sendEvolutionMessage, sendEvolutionVoice } from '@/lib/evolution'
+import { sendEvolutionMessage, sendEvolutionVoice, resolveEvoCredentials } from '@/lib/evolution'
 import { isVoiceMessage } from '@/lib/voice'
 
 const REALTIME_PORT = process.env.REALTIME_PORT || '3003'
@@ -37,8 +37,9 @@ async function broadcastToRealtime(channel: string, message: unknown): Promise<v
 export async function POST(req: NextRequest) {
   try {
     // Authenticate the inbound webhook. Evolution delivers webhooks with an
-    // `apikey` header (or a query token on some deployments).
-    const apiKey = process.env.EVOLUTION_API_KEY
+    // `apikey` header (or a query token on some deployments). Accept the DB
+    // (platform admin managed) key, falling back to the .env key.
+    const { apiKey } = await resolveEvoCredentials()
     if (apiKey) {
       const headerKey = req.headers.get('apikey') || req.headers.get('x-api-key')
       const queryToken = new URL(req.url).searchParams.get('token')
@@ -327,7 +328,8 @@ function extractMessageBody(message: {
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
-  if (token !== process.env.EVOLUTION_API_KEY) {
+  const { apiKey } = await resolveEvoCredentials()
+  if (token !== apiKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return NextResponse.json({ ok: true, service: 'evolution-webhook' })

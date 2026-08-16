@@ -15,6 +15,7 @@ import { processWebhookQueue } from '../../worker/webhook-worker'
 import { sendMetaMessage, decryptMetaToken } from '../lib/meta'
 import { decryptPhone } from '../lib/phone-encryption'
 import { sendEmail } from '../lib/notifications'
+import { resolveEvoCredentials } from '../lib/evolution'
 
 // Store for in-memory queue operations (sandbox mode)
 let _store: any = null
@@ -164,8 +165,7 @@ export async function processPendingReminders(): Promise<number> {
 
     try {
       if (clinic.evolutionConnected && clinic.evolutionInstance) {
-        const evoUrl = process.env.EVOLUTION_API_URL
-        const evoKey = process.env.EVOLUTION_API_KEY
+        const { baseUrl: evoUrl, apiKey: evoKey } = await resolveEvoCredentials()
         if (evoUrl && evoKey) {
           const res = await fetch(`${evoUrl}/message/sendText/${clinic.evolutionInstance}`, {
             method: 'POST',
@@ -301,8 +301,7 @@ export async function processFeedbackRequests(): Promise<number> {
 
       // Try Evolution API first
       if (clinic.evolutionConnected && clinic.evolutionInstance) {
-        const evoUrl = process.env.EVOLUTION_API_URL
-        const evoKey = process.env.EVOLUTION_API_KEY
+        const { baseUrl: evoUrl, apiKey: evoKey } = await resolveEvoCredentials()
         if (evoUrl && evoKey) {
           const res = await fetch(`${evoUrl}/message/sendText/${clinic.evolutionInstance}`, {
             method: 'POST',
@@ -415,8 +414,7 @@ export async function processAutomationEvents(): Promise<number> {
             if (!clinic) break
 
             if (clinic.evolutionConnected && clinic.evolutionInstance) {
-              const evoUrl = process.env.EVOLUTION_API_URL
-              const evoKey = process.env.EVOLUTION_API_KEY
+              const { baseUrl: evoUrl, apiKey: evoKey } = await resolveEvoCredentials()
               if (evoUrl && evoKey) {
                 fetch(`${evoUrl}/message/sendText/${clinic.evolutionInstance}`, {
                   method: 'POST',

@@ -9,6 +9,7 @@
  */
 import { sendMetaMessage, decryptMetaToken } from './meta'
 import { decryptPhone } from './phone-encryption'
+import { resolveEvoCredentials } from './evolution'
 
 /**
  * Default follow-up rules that should be created for every new clinic.
@@ -270,8 +271,7 @@ export async function sendWhatsAppMessage(clinicId: string, phone: string, messa
   try {
     // Try Evolution API first
     if (clinic.evolutionConnected && clinic.evolutionInstance) {
-      const evoUrl = process.env.EVOLUTION_API_URL
-      const evoKey = process.env.EVOLUTION_API_KEY
+      const { baseUrl: evoUrl, apiKey: evoKey } = await resolveEvoCredentials()
       if (evoUrl && evoKey) {
         const res = await fetch(`${evoUrl}/message/sendText/${clinic.evolutionInstance}`, {
           method: 'POST',

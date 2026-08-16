@@ -15,6 +15,7 @@
 import { db } from '../src/lib/db'
 import { sendMetaMessage, decryptMetaToken } from '../src/lib/meta'
 import { decryptPhone } from '../src/lib/phone-encryption'
+import { resolveEvoCredentials } from '../src/lib/evolution'
 
 // ============================================================================
 // MODE DETECTION
@@ -142,8 +143,7 @@ async function runProductionMode() {
 
     try {
       if (clinic.evolutionConnected && clinic.evolutionInstance) {
-        const evoUrl = process.env.EVOLUTION_API_URL
-        const evoKey = process.env.EVOLUTION_API_KEY
+        const { baseUrl: evoUrl, apiKey: evoKey } = await resolveEvoCredentials()
         if (evoUrl && evoKey) {
           const res = await fetch(`${evoUrl}/message/sendText/${clinic.evolutionInstance}`, {
             method: 'POST',

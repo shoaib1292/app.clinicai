@@ -71,7 +71,7 @@ async function resetPassword(req: NextRequest) {
     case 'receptionist': {
       const user = await db.receptionist.findUnique({ where: { id: userId } })
       if (user && user.email === email) {
-        await db.receptionist.update({ where: { id: userId }, data: { passwordHash } })
+        await db.receptionist.update({ where: { id: userId }, data: { passwordHash, emailVerified: new Date() } })
         updated = true
       }
       break
@@ -79,7 +79,7 @@ async function resetPassword(req: NextRequest) {
     case 'doctor': {
       const user = await db.doctor.findUnique({ where: { id: userId } })
       if (user && user.email === email) {
-        await db.doctor.update({ where: { id: userId }, data: { passwordHash } })
+        await db.doctor.update({ where: { id: userId }, data: { passwordHash, emailVerified: new Date() } })
         updated = true
       }
       break
@@ -87,7 +87,7 @@ async function resetPassword(req: NextRequest) {
     case 'pharmacist': {
       const user = await db.pharmacist.findUnique({ where: { id: userId } })
       if (user && user.email === email) {
-        await db.pharmacist.update({ where: { id: userId }, data: { passwordHash } })
+        await db.pharmacist.update({ where: { id: userId }, data: { passwordHash, emailVerified: new Date() } })
         updated = true
       }
       break
@@ -95,7 +95,7 @@ async function resetPassword(req: NextRequest) {
     case 'lab_admin': {
       const user = await db.labAdmin.findUnique({ where: { id: userId } })
       if (user && user.email === email) {
-        await db.labAdmin.update({ where: { id: userId }, data: { passwordHash } })
+        await db.labAdmin.update({ where: { id: userId }, data: { passwordHash, emailVerified: new Date() } })
         updated = true
       }
       break
@@ -103,7 +103,7 @@ async function resetPassword(req: NextRequest) {
     case 'accountant': {
       const user = await db.accountant.findUnique({ where: { id: userId } })
       if (user && user.email === email) {
-        await db.accountant.update({ where: { id: userId }, data: { passwordHash } })
+        await db.accountant.update({ where: { id: userId }, data: { passwordHash, emailVerified: new Date() } })
         updated = true
       }
       break

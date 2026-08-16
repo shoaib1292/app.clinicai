@@ -13,6 +13,14 @@ export async function register() {
         throw new Error(`Missing required env vars in production: ${missing.join(', ')}`)
       }
     }
+
+    // Ensure platform admin exists (sourced from PLATFORM_ADMIN_EMAIL/PASSWORD).
+    try {
+      const { ensurePlatformAdmin } = await import('@/lib/ensure-platform-admin')
+      await ensurePlatformAdmin()
+    } catch (e) {
+      console.error('[boot] ensurePlatformAdmin failed:', e)
+    }
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {

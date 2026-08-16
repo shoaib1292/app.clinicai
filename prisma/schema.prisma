@@ -412,6 +412,7 @@ model Doctor {
   bio              String? // Longer bio/description for website doctor cards
   languages        String? // Comma-separated: "urdu,english,sindhi"
   displayOnWebsite Boolean @default(true) // Show on public website?
+  emailVerified    DateTime?
 
   // ── Telemedicine ──
   canTelemedicine Boolean @default(false)
@@ -440,66 +441,70 @@ model Doctor {
 }
 
 model Receptionist {
-  id           String    @id @default(cuid())
-  userId       String?   @unique // link to unified User (Google OAuth)
-  clinicId     String
-  email        String    @unique
-  name         String
-  passwordHash String
-  phone        String?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id            String    @id @default(cuid())
+  userId        String?   @unique // link to unified User (Google OAuth)
+  clinicId      String
+  email         String    @unique
+  name          String
+  passwordHash  String
+  phone         String?
+  emailVerified DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   clinic    Clinic     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   auditLogs AuditLog[]
 }
 
 model Pharmacist {
-  id           String    @id @default(cuid())
-  userId       String?   @unique
-  clinicId     String
-  email        String    @unique
-  name         String
-  passwordHash String
-  phone        String?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id            String    @id @default(cuid())
+  userId        String?   @unique
+  clinicId      String
+  email         String    @unique
+  name          String
+  passwordHash  String
+  phone         String?
+  emailVerified DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 }
 
 model LabAdmin {
-  id           String    @id @default(cuid())
-  userId       String?   @unique
-  clinicId     String
-  email        String    @unique
-  name         String
-  passwordHash String
-  phone        String?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id            String    @id @default(cuid())
+  userId        String?   @unique
+  clinicId      String
+  email         String    @unique
+  name          String
+  passwordHash  String
+  phone         String?
+  emailVerified DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 }
 
 model Accountant {
-  id           String    @id @default(cuid())
-  userId       String?   @unique
-  clinicId     String
-  email        String    @unique
-  name         String
-  passwordHash String
-  phone        String?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id            String    @id @default(cuid())
+  userId        String?   @unique
+  clinicId      String
+  email         String    @unique
+  name          String
+  passwordHash  String
+  phone         String?
+  emailVerified DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 }

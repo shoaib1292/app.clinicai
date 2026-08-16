@@ -42,6 +42,7 @@ async function create(req: NextRequest) {
       passwordHash,
       phone: phone || null,
       active: true,
+      emailVerified: null,
     },
   })
 
@@ -55,11 +56,10 @@ async function create(req: NextRequest) {
     ip: req.headers.get('x-forwarded-for') || '127.0.0.1',
   })
 
-  // Send invitation email with password-setup link (7-day expiry)
-  if (!rawPassword) {
-    const clinicName = await getClinicNameForUser('receptionist', clinicId)
-    await sendStaffInvite({ id: receptionist.id, name: receptionist.name, email: receptionist.email, userType: 'receptionist' }, clinicName)
-  }
+  // Always send a verification/password-setup link — staff must verify email
+  // before they can log in.
+  const clinicName = await getClinicNameForUser('receptionist', clinicId)
+  await sendStaffInvite({ id: receptionist.id, name: receptionist.name, email: receptionist.email, userType: 'receptionist' }, clinicName)
 
   return ok({ id: receptionist.id, name: receptionist.name, email: receptionist.email, phone: receptionist.phone, active: receptionist.active })
 }

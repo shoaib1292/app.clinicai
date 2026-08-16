@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { signSession, verifyPassword, SESSION_COOKIE } from '@/lib/auth'
 import { auditLog } from '@/lib/session'
 import { ok, err, handle } from '@/lib/api'
+import { ensurePlatformAdmin } from '@/lib/ensure-platform-admin'
 
 interface LoginBody {
   email: string
@@ -14,6 +15,9 @@ async function login(req: NextRequest) {
   const email = body.email?.toLowerCase().trim()
   const password = body.password
   if (!email || !password) return err('Email and password required', 400)
+
+  // Self-heal: ensure the platform admin exists (sourced from env vars).
+  await ensurePlatformAdmin()
 
   const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
 
@@ -62,6 +66,7 @@ async function login(req: NextRequest) {
   const rec = await db.receptionist.findUnique({ where: { email } })
   if (rec) {
     if (!rec.active) return err('Account disabled', 403)
+    if (!rec.emailVerified) return err('Please verify your email first. Check your inbox for the verification link.', 403)
     const valid = await verifyPassword(password, rec.passwordHash)
     if (!valid) return err('Invalid credentials', 401)
     const token = signSession({ sub: rec.id, type: 'receptionist', clinicId: rec.clinicId, email: rec.email, name: rec.name })
@@ -75,6 +80,7 @@ async function login(req: NextRequest) {
   const doc = await db.doctor.findFirst({ where: { email } })
   if (doc) {
     if (!doc.passwordHash) return err('Doctor account not configured for login', 400)
+    if (!doc.emailVerified) return err('Please verify your email first. Check your inbox for the verification link.', 403)
     const valid = await verifyPassword(password, doc.passwordHash)
     if (!valid) return err('Invalid credentials', 401)
     const token = signSession({ sub: doc.id, type: 'doctor', clinicId: doc.clinicId, email: doc.email || '', name: doc.name })
@@ -88,6 +94,7 @@ async function login(req: NextRequest) {
   const pharm = await db.pharmacist.findUnique({ where: { email } })
   if (pharm) {
     if (!pharm.active) return err('Account disabled', 403)
+    if (!pharm.emailVerified) return err('Please verify your email first. Check your inbox for the verification link.', 403)
     const valid = await verifyPassword(password, pharm.passwordHash)
     if (!valid) return err('Invalid credentials', 401)
     const token = signSession({ sub: pharm.id, type: 'pharmacist', clinicId: pharm.clinicId, email: pharm.email, name: pharm.name })
@@ -101,6 +108,7 @@ async function login(req: NextRequest) {
   const lab = await db.labAdmin.findUnique({ where: { email } })
   if (lab) {
     if (!lab.active) return err('Account disabled', 403)
+    if (!lab.emailVerified) return err('Please verify your email first. Check your inbox for the verification link.', 403)
     const valid = await verifyPassword(password, lab.passwordHash)
     if (!valid) return err('Invalid credentials', 401)
     const token = signSession({ sub: lab.id, type: 'lab_admin', clinicId: lab.clinicId, email: lab.email, name: lab.name })
@@ -114,6 +122,7 @@ async function login(req: NextRequest) {
   const acct = await db.accountant.findUnique({ where: { email } })
   if (acct) {
     if (!acct.active) return err('Account disabled', 403)
+    if (!acct.emailVerified) return err('Please verify your email first. Check your inbox for the verification link.', 403)
     const valid = await verifyPassword(password, acct.passwordHash)
     if (!valid) return err('Invalid credentials', 401)
     const token = signSession({ sub: acct.id, type: 'accountant', clinicId: acct.clinicId, email: acct.email, name: acct.name })

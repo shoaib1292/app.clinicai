@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClinicScope, requireType, auditLog } from '@/lib/session'
 import { ok, err, handle } from '@/lib/api'
+import { sendStaffInvite, getClinicNameForUser } from '@/lib/staff-invite'
 
 // POST /api/receptionists/invite — invite a receptionist (same as create but no password required upfront)
 async function invite(req: NextRequest) {
@@ -16,7 +17,7 @@ async function invite(req: NextRequest) {
   const existing = await db.receptionist.findUnique({ where: { email: emailLower } })
   if (existing) return err('Email already in use', 409)
 
-  // Create with a placeholder password — receptionist can reset later
+  // Create with a placeholder password — receptionist must verify email + set password.
   const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'
   const { hashPassword } = await import('@/lib/auth')
   const passwordHash = await hashPassword(tempPassword)
@@ -29,6 +30,7 @@ async function invite(req: NextRequest) {
       passwordHash,
       phone: phone || null,
       active: true,
+      emailVerified: null,
     },
   })
 
@@ -42,7 +44,10 @@ async function invite(req: NextRequest) {
     ip: req.headers.get('x-forwarded-for') || '127.0.0.1',
   })
 
-  return ok({ id: receptionist.id, name: receptionist.name, email: receptionist.email, phone: receptionist.phone, active: receptionist.active, tempPassword })
+  const clinicName = await getClinicNameForUser('receptionist', clinicId)
+  await sendStaffInvite({ id: receptionist.id, name: receptionist.name, email: receptionist.email, userType: 'receptionist' }, clinicName)
+
+  return ok({ id: receptionist.id, name: receptionist.name, email: receptionist.email, phone: receptionist.phone, active: receptionist.active })
 }
 
 export const POST = handle(invite)

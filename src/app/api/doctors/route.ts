@@ -46,6 +46,7 @@ async function create(req: NextRequest) {
       clinicId,
       email: email || null,
       passwordHash,
+      emailVerified: null,
       canTelemedicine: canTelemedicine ?? false,
       telemedicineFee: telemedicineFee ?? 0,
     },
@@ -72,8 +73,9 @@ async function create(req: NextRequest) {
 
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'doctor_created', target: doctor.id, metadata: { name, speciality } })
 
-  // Send invitation email with password-setup link (7-day expiry) when no password was set
-  if (email && !password) {
+  // Send a verification/password-setup link when a login email was provided —
+  // doctor must verify email before they can log in.
+  if (email) {
     const clinicName = await getClinicNameForUser('doctor', clinicId)
     await sendStaffInvite({ id: doctor.id, name: doctor.name, email: doctor.email || '', userType: 'doctor' }, clinicName)
   }

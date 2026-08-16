@@ -7,19 +7,9 @@ import { motion, type Variants } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { ImageSlider } from '@/components/ui/image-slider'
 import { Loader2, ArrowRight, Shield } from 'lucide-react'
 import { toast } from 'sonner'
-
-const demoAccounts = [
-  { email: 'admin@clinicsai.pk', label: 'Platform Admin', desc: 'Manage LLM keys, pricing, all clinics' },
-  { email: 'sales@clinicsai.pk', label: 'Platform Sales', desc: 'Leads + platform calendar' },
-  { email: 'finance@clinicsai.pk', label: 'Platform Finance', desc: 'Payment proofs, invoices, ledger' },
-  { email: 'admin@al-shifa.pk', label: 'Clinic Admin', desc: 'Al-Shifa Family Clinic' },
-  { email: 'reception@al-shifa.pk', label: 'Receptionist', desc: 'Al-Shifa live queue' },
-  { email: 'doctor0@al-shifa.pk', label: 'Doctor', desc: 'Dr. Ahmed General' },
-]
 
 const images = [
   'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=900&auto=format&fit=crop&q=60',
@@ -47,8 +37,8 @@ const itemVariants: Variants = {
 
 export function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('admin@clinicsai.pk')
-  const [password, setPassword] = useState('ClinicAI@2026')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
@@ -73,11 +63,6 @@ export function LoginPage() {
       toast.error('Network error')
       setLoading(false)
     }
-  }
-
-  function fillDemo(em: string) {
-    setEmail(em)
-    setPassword('ClinicAI@2026')
   }
 
   return (
@@ -206,30 +191,6 @@ export function LoginPage() {
                 Create clinic account
               </Link>
             </motion.p>
-          </motion.div>
-
-          {/* Demo accounts */}
-          <motion.div
-            variants={itemVariants}
-            className="w-full max-w-sm mt-8 pt-6 border-t"
-          >
-            <p className="text-xs text-muted-foreground mb-3">Demo accounts (click to fill)</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {demoAccounts.map((a) => (
-                <button
-                  key={a.email}
-                  type="button"
-                  onClick={() => fillDemo(a.email)}
-                  className="text-left p-2 rounded-md hover:bg-accent transition-colors border border-transparent hover:border-border"
-                >
-                  <div className="text-xs font-medium truncate">{a.label}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{a.email}</div>
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-2 text-center">
-              Password: <span className="font-mono text-primary">ClinicAI@2026</span>
-            </p>
           </motion.div>
         </div>
       </motion.div>

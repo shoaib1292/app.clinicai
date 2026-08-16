@@ -35,7 +35,7 @@ async function create(req: NextRequest) {
   const acct = await db.accountant.create({
     data: {
       clinicId, name, email: emailLower, passwordHash,
-      phone: phone || null, active: true,
+      phone: phone || null, active: true, emailVerified: null,
     },
   })
 
@@ -46,11 +46,10 @@ async function create(req: NextRequest) {
     ip: req.headers.get('x-forwarded-for') || '127.0.0.1',
   })
 
-  // Send invitation email with password-setup link (7-day expiry)
-  if (!rawPassword) {
-    const clinicName = await getClinicNameForUser('accountant', clinicId)
-    await sendStaffInvite({ id: acct.id, name: acct.name, email: acct.email, userType: 'accountant' }, clinicName)
-  }
+  // Always send a verification/password-setup link — staff must verify email
+  // before they can log in.
+  const clinicName = await getClinicNameForUser('accountant', clinicId)
+  await sendStaffInvite({ id: acct.id, name: acct.name, email: acct.email, userType: 'accountant' }, clinicName)
 
   return ok({ id: acct.id, name: acct.name, email: acct.email, phone: acct.phone, active: acct.active })
 }

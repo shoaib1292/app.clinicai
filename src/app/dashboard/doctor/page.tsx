@@ -41,7 +41,7 @@ export default async function DoctorDashboardPage() {
     },
   })
 
-  const currentToken = store.getCurrentToken(clinicId, doctorId)
+  const currentToken = await store.getCurrentToken(clinicId, doctorId)
 
   const stats = {
     todayTotal: todayAppts.length,

@@ -21,9 +21,9 @@ async function status(req: NextRequest) {
   if (!body.id) return err('Message ID required', 400)
 
   if (body.status === 'sent') {
-    markSmsSent(body.id)
+    await markSmsSent(body.id)
   } else if (body.status === 'failed') {
-    markSmsFailed(body.id, body.error || 'Unknown error')
+    await markSmsFailed(body.id, body.error || 'Unknown error')
   } else {
     return err('Invalid status', 400)
   }

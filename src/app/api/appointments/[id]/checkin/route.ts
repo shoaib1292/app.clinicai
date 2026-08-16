@@ -74,9 +74,9 @@ async function checkIn(req: NextRequest, { params }: { params: Promise<{ id: str
 
   // Update current token (advance to this patient's token)
   if (appt.slot?.tokenNo) {
-    store.setCurrentToken(clinicId, appt.doctorId, appt.slot.tokenNo)
+    await store.setCurrentToken(clinicId, appt.doctorId, appt.slot.tokenNo)
   }
-  store.publish(`clinic:${clinicId}:queue`, { type: 'patient_checked_in', appointmentId: id, doctorId: appt.doctorId, status: newStatus })
+  await store.publish(`clinic:${clinicId}:queue`, { type: 'patient_checked_in', appointmentId: id, doctorId: appt.doctorId, status: newStatus })
 
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'patient_checked_in', target: id, metadata: { lateBy, status: newStatus } })
 

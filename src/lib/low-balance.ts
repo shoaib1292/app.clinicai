@@ -33,7 +33,7 @@ export async function checkLowBalance(clinicId: string): Promise<{ alerted: bool
   if (clinic.creditBalance <= threshold) {
     // Check if we already alerted recently (dedup via store — 1 alert per 24h)
     const alertKey = `low_balance_alerted:${clinicId}`
-    if (store.get(alertKey)) {
+    if (await store.get(alertKey)) {
       return { alerted: false, balance: clinic.creditBalance, threshold }
     }
 
@@ -41,7 +41,7 @@ export async function checkLowBalance(clinicId: string): Promise<{ alerted: bool
     await fireLowBalanceAlert(clinic.id, clinic.name, clinic.creditBalance, threshold)
 
     // Mark as alerted for 24h
-    store.set(alertKey, true, 24 * 60 * 60)
+    await store.set(alertKey, true, 24 * 60 * 60)
 
     return { alerted: true, balance: clinic.creditBalance, threshold }
   }
@@ -53,7 +53,7 @@ async function fireLowBalanceAlert(clinicId: string, clinicName: string, balance
   const message = `⚠️ Low Balance Alert: ${clinicName} credit balance is PKR ${balance} (threshold: PKR ${threshold}). Please top up to avoid booking interruption.`
 
   // 1. Publish realtime event (dashboard notification)
-  store.publish(`clinic:${clinicId}:ops`, {
+  await store.publish(`clinic:${clinicId}:ops`, {
     type: 'low_balance_alert',
     clinicId,
     balance,

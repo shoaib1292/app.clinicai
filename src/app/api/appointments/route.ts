@@ -231,7 +231,7 @@ async function book(req: NextRequest) {
     }
 
     // Broadcast realtime
-    store.publish(`clinic:${clinicId}:queue`, { type: 'slot_booked', appointmentId: appt.id, slotId, patientName: patient.name, doctorId })
+    await store.publish(`clinic:${clinicId}:queue`, { type: 'slot_booked', appointmentId: appt.id, slotId, patientName: patient.name, doctorId })
 
     // Schedule reminders (T-24h, T-2h, T-30min) — for future appointments
     const now = Date.now()

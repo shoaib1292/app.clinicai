@@ -19,7 +19,7 @@ async function handler(req: NextRequest) {
   if (!checkAuth(req)) return err('Unauthorized', 401)
 
   if (req.method === 'GET') {
-    const online = getOnlineGateway()
+    const online = await getOnlineGateway()
     return ok({
       gateway: online ? { id: online, status: 'online' } : null,
       pendingCount: getPendingCount(),
@@ -31,11 +31,11 @@ async function handler(req: NextRequest) {
     if (!body.id) return err('Gateway ID required', 400)
 
     if (body.action === 'online') {
-      setGatewayOnline(body.id)
+      await setGatewayOnline(body.id)
       return ok({ registered: true, id: body.id })
     }
     if (body.action === 'offline') {
-      setGatewayOffline(body.id)
+      await setGatewayOffline(body.id)
       return ok({ deregistered: true, id: body.id })
     }
     return err('Invalid action', 400)

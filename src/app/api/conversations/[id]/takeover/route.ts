@@ -13,7 +13,7 @@ async function takeover(req: NextRequest, { params }: { params: Promise<{ id: st
 
   await db.conversation.update({ where: { id }, data: { takenOverBy: session.sub, status: 'active' } })
   // Signal the agent to pause for this conversation
-  store.set(`agent:paused:${clinicId}:${convo.patientId}`, true, 60 * 60) // 1h
+  await store.set(`agent:paused:${clinicId}:${convo.patientId}`, true, 60 * 60) // 1h
 
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'conversation_takeover', target: id })
   return ok({ taken: true })

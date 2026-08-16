@@ -41,10 +41,8 @@ async function send(req: NextRequest, { params }: { params: Promise<{ id: string
   })
   const channel = `clinic:${clinicId}:conversations`
   const event = { type: 'message_received', conversationId: id, direction: 'out', body: msgBody }
-  store.publish(channel, event)
+  await store.publish(channel, event)
   void broadcastToRealtime(channel, event)
-
-  await db.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
 
   await db.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
 

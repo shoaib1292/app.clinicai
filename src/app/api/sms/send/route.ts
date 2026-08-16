@@ -24,7 +24,7 @@ async function send(req: NextRequest) {
   if (!to) return err('Phone number required', 400)
   if (!text) return err('Message body required', 400)
 
-  const result = queueSms(to, text)
+  const result = await queueSms(to, text)
   if (!result.ok) return err(result.error || 'Failed to queue SMS', 503)
 
   return ok({ id: result.id, status: 'queued' })

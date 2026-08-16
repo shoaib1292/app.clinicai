@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       }
 
       // --- DEDUP ---
-      if (isDuplicateMessage(providerMsgId)) {
+      if (await isDuplicateMessage(providerMsgId)) {
         continue
       }
 
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
           providerMsgId,
         },
       })
-      store.publish(`clinic:${clinic.id}:conversations`, {
+      await store.publish(`clinic:${clinic.id}:conversations`, {
         type: 'message_received',
         conversationId: conversation.id,
         direction: 'in',
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
         where: { id: conversation.id },
         data: { updatedAt: new Date(), lastIntent: result.toolCalls[0]?.name || 'chat' },
       })
-      store.publish(`clinic:${clinic.id}:conversations`, {
+      await store.publish(`clinic:${clinic.id}:conversations`, {
         type: 'message_received',
         conversationId: conversation.id,
         direction: 'out',

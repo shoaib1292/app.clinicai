@@ -18,21 +18,21 @@ let onlineGatewayId: string | null = null
 
 const pendingStatus = new Map<string, SmsPayload>()
 
-export function setGatewayOnline(id: string) {
+export async function setGatewayOnline(id: string) {
   onlineGatewayId = id
-  store.set('sms:gateway:online', id)
+  await store.set('sms:gateway:online', id)
 }
 
-export function setGatewayOffline(id: string) {
+export async function setGatewayOffline(id: string) {
   if (onlineGatewayId === id) {
     onlineGatewayId = null
-    store.del('sms:gateway:online')
+    await store.del('sms:gateway:online')
   }
 }
 
-export function getOnlineGateway(): string | null {
+export async function getOnlineGateway(): Promise<string | null> {
   if (onlineGatewayId) return onlineGatewayId
-  const cached = store.get<string>('sms:gateway:online')
+  const cached = await store.get<string>('sms:gateway:online')
   if (cached) onlineGatewayId = cached
   return cached
 }
@@ -49,8 +49,8 @@ async function broadcastToRealtime(channel: string, message: unknown) {
   }
 }
 
-export function queueSms(to: string, body: string): { ok: boolean; id: string; error?: string } {
-  if (!getOnlineGateway()) {
+export async function queueSms(to: string, body: string): Promise<{ ok: boolean; id: string; error?: string }> {
+  if (!(await getOnlineGateway())) {
     return { ok: false, id: '', error: 'No SMS gateway online' }
   }
 
@@ -59,25 +59,25 @@ export function queueSms(to: string, body: string): { ok: boolean; id: string; e
   pendingStatus.set(id, payload)
 
   // Expire after 5 minutes
-  store.set(`sms:pending:${id}`, payload, 300)
+  await store.set(`sms:pending:${id}`, payload, 300)
 
   // In-process publish (local subscribers) + cross-process broadcast to Socket.io
-  store.publish('sms:outgoing', payload)
+  await store.publish('sms:outgoing', payload)
   broadcastToRealtime('sms:outgoing', payload)
 
   return { ok: true, id }
 }
 
-export function markSmsSent(id: string) {
+export async function markSmsSent(id: string) {
   pendingStatus.delete(id)
-  store.del(`sms:pending:${id}`)
-  store.publish('sms:status', { id, status: 'sent' })
+  await store.del(`sms:pending:${id}`)
+  await store.publish('sms:status', { id, status: 'sent' })
 }
 
-export function markSmsFailed(id: string, error: string) {
+export async function markSmsFailed(id: string, error: string) {
   pendingStatus.delete(id)
-  store.del(`sms:pending:${id}`)
-  store.publish('sms:status', { id, status: 'failed', error })
+  await store.del(`sms:pending:${id}`)
+  await store.publish('sms:status', { id, status: 'failed', error })
 }
 
 export function getPendingCount(): number {

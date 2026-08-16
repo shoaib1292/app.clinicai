@@ -93,7 +93,7 @@ async function sendMessage(req: NextRequest) {
       data: { conversationId, direction: 'in', type: inboundType, body: inboundBody },
     })
     void broadcastToRealtime(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'in', body: inboundBody })
-    store.publish(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'in', body: inboundBody })
+    await store.publish(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'in', body: inboundBody })
   }
 
   // Run the agent (with voice support)
@@ -122,7 +122,7 @@ async function sendMessage(req: NextRequest) {
       data: { updatedAt: new Date(), lastIntent: result.toolCalls[0]?.name || 'chat' },
     })
     void broadcastToRealtime(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'out', body: result.reply })
-    store.publish(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'out', body: result.reply })
+    await store.publish(`clinic:${clinicId}:conversations`, { type: 'message_received', conversationId, direction: 'out', body: result.reply })
   }
 
   // Deliver to WhatsApp via Evolution API

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot index.ts",
-    "start": "bun index.ts"
+    "start": "node --import tsx index.ts"
   },
   "dependencies": {
-    "socket.io": "^4.7.0"
+    "socket.io": "^4.7.0",
+    "tsx": "^4.23.1"
   }
 }

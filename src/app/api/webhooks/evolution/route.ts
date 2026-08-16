@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --- DEDUP (founder doc §7) ---
-    if (providerMsgId && isDuplicateMessage(providerMsgId)) {
+    if (providerMsgId && (await isDuplicateMessage(providerMsgId))) {
       return NextResponse.json({ ok: true, skipped: 'duplicate' })
     }
 
@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
       direction: 'in',
       body: messageBody,
     }
-    store.publish(channel, inboundEvent)
+    await store.publish(channel, inboundEvent)
     // Also broadcast to realtime service (separate process on port 3003)
     void broadcastToRealtime(channel, inboundEvent)
 
@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
       where: { id: conversation.id },
       data: { updatedAt: new Date(), lastIntent: result.toolCalls[0]?.name || 'chat' },
     })
-    store.publish(`clinic:${clinic.id}:conversations`, {
+    await store.publish(`clinic:${clinic.id}:conversations`, {
       type: 'message_received',
       conversationId: conversation.id,
       direction: 'out',

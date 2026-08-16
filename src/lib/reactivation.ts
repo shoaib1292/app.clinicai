@@ -72,13 +72,13 @@ export async function reactivateDormantPatients(clinicId: string): Promise<{
   for (const p of dormant) {
     // Dedup: only queue once per 30 days per patient
     const dedupKey = `reactivation_queued:${clinicId}:${p.patientId}`
-    if (store.get(dedupKey)) continue
+    if (await store.get(dedupKey)) continue
 
     // Queue the reactivation message (in production, this would be a BullMQ job)
-    store.set(dedupKey, true, 30 * 24 * 60 * 60) // 30-day dedup
+    await store.set(dedupKey, true, 30 * 24 * 60 * 60) // 30-day dedup
 
     // Publish realtime event so clinic staff can see reactivation activity
-    store.publish(`clinic:${clinicId}:ops`, {
+    await store.publish(`clinic:${clinicId}:ops`, {
       type: 'reactivation_queued',
       patientId: p.patientId,
       patientName: p.patientName,

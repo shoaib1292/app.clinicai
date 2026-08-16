@@ -114,7 +114,7 @@ async function reschedule(req: NextRequest, { params }: { params: Promise<{ id: 
     syncCalendarReschedule(id, clinicId, doc.name, newStart, newEnd).catch(() => {})
 
     // Publish realtime event
-    store.publish(`clinic:${clinicId}:queue`, {
+    await store.publish(`clinic:${clinicId}:queue`, {
       type: 'appointment_rescheduled',
       appointmentId: id,
       oldStart: appt.start,

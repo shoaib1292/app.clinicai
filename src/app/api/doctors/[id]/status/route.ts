@@ -15,8 +15,8 @@ async function setStatus(req: NextRequest, { params }: { params: Promise<{ id: s
   if (!doctor) return err('Doctor not found', 404)
 
   await db.doctor.update({ where: { id }, data: { currentStatus: status, statusEta: etaMin ?? null } })
-  store.publish(`clinic:${clinicId}:ops`, { type: 'doctor_status_changed', doctorId: id, status, etaMin })
-  store.publish(`doctor:${id}`, { type: 'status_changed', status })
+  await store.publish(`clinic:${clinicId}:ops`, { type: 'doctor_status_changed', doctorId: id, status, etaMin })
+  await store.publish(`doctor:${id}`, { type: 'status_changed', status })
 
   return ok({ status, updatedBy: session.sub })
 }

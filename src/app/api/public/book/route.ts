@@ -39,9 +39,9 @@ async function book(req: NextRequest) {
   // Rate limit per IP (basic abuse protection — founder doc §42: 50 bookings/hour)
   const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
   const rateKey = `public_book:${ip}`
-  const count = store.get<number>(rateKey) || 0
+  const count = (await store.get<number>(rateKey)) || 0
   if (count >= 50) return err('Rate limit exceeded. Please try again later.', 429)
-  store.set(rateKey, count + 1, 3600)
+  await store.set(rateKey, count + 1, 3600)
 
   const lockToken = await store.acquireLock(`slot:${slotId}`, 300)
   if (!lockToken) return err('Slot is being booked by someone else', 409)
@@ -151,7 +151,7 @@ async function book(req: NextRequest) {
       }
     }
 
-    store.publish(`clinic:${clinicId}:queue`, { type: 'slot_booked', appointmentId: appt.id, slotId, patientName, doctorId })
+    await store.publish(`clinic:${clinicId}:queue`, { type: 'slot_booked', appointmentId: appt.id, slotId, patientName, doctorId })
 
     return ok({
       appointmentId: appt.id,
@@ -161,7 +161,7 @@ async function book(req: NextRequest) {
       discount: { amount: discount.discountAmount, appliedBy: discount.appliedBy },
     })
   } finally {
-    store.releaseLock(`slot:${slotId}`, lockToken)
+    await store.releaseLock(`slot:${slotId}`, lockToken)
   }
 }
 

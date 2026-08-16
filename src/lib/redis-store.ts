@@ -24,7 +24,9 @@ class RedisStore {
   constructor(url?: string) {
     const redisUrl = url || process.env.REDIS_URL || 'redis://localhost:6379'
 
-    // Use separate connections for pub/sub to comply with Redis protocol
+    // Use separate connections for pub/sub to comply with Redis protocol.
+    // lazyConnect means no socket is opened until the first command — safe to
+    // construct during `next build` (which may not have Redis reachable).
     this.pub = new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       retryStrategy: (times) => Math.min(times * 100, 3000),
@@ -41,31 +43,20 @@ class RedisStore {
       lazyConnect: true,
     })
 
-    // Auto-connect and wire pub/sub message handling
-    this.initPubSub()
-  }
-
-  private async initPubSub(): Promise<void> {
-    try {
-      await Promise.all([this.pub.connect(), this.sub.connect(), this.client.connect()])
-
-      this.sub.on('message', (channel: string, message: string) => {
-        try {
-          const parsed = JSON.parse(message)
-          const subs = this.listeners.get(channel)
-          if (subs) subs.forEach((cb) => cb(parsed))
-          // Wildcard listeners
-          const wildSubs = this.listeners.get('*')
-          if (wildSubs) wildSubs.forEach((cb) => cb({ channel, msg: parsed }))
-        } catch {
-          // If JSON parse fails, pass raw message
-          const subs = this.listeners.get(channel)
-          if (subs) subs.forEach((cb) => cb(message))
-        }
-      })
-    } catch (err) {
-      console.warn('[RedisStore] Connection failed, operations will fail:', err)
-    }
+    // Wire pub/sub message handling (no connection needed yet).
+    this.sub.on('message', (channel: string, message: string) => {
+      try {
+        const parsed = JSON.parse(message)
+        const subs = this.listeners.get(channel)
+        if (subs) subs.forEach((cb) => cb(parsed))
+        // Wildcard listeners
+        const wildSubs = this.listeners.get('*')
+        if (wildSubs) wildSubs.forEach((cb) => cb({ channel, msg: parsed }))
+      } catch {
+        const subs = this.listeners.get(channel)
+        if (subs) subs.forEach((cb) => cb(message))
+      }
+    })
   }
 
   // ===== KV =====

@@ -70,7 +70,7 @@ async function bulkCancel(req: NextRequest) {
       })
 
       // Publish realtime event
-      store.publish(`clinic:${clinicId}:queue`, {
+      await store.publish(`clinic:${clinicId}:queue`, {
         type: 'slot_cancelled',
         appointmentId: appt.id,
         slotId: appt.slotId,

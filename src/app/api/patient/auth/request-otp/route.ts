@@ -54,7 +54,7 @@ async function requestOTP(req: NextRequest) {
   ])
 
   // ── Send OTP via SMS Gateway ──
-  const smsResult = queueSms(phone, `Your ClinicAI verification code is: ${otp}`)
+  const smsResult = await queueSms(phone, `Your ClinicAI verification code is: ${otp}`)
 
   if (!smsResult.ok) {
     // SMS gateway offline — fallback: log for dev, still allow dev environments

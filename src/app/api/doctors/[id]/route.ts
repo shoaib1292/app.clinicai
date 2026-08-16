@@ -19,7 +19,7 @@ async function setStatus(req: NextRequest, { params }: { params: Promise<{ id: s
   await db.doctor.update({ where: { id }, data: { currentStatus: status, statusEta: etaMin ?? null } })
 
   // Broadcast realtime event
-  store.publish(`clinic:${clinicId}:ops`, { type: 'doctor_status_changed', doctorId: id, status, etaMin })
+  await store.publish(`clinic:${clinicId}:ops`, { type: 'doctor_status_changed', doctorId: id, status, etaMin })
 
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'doctor_status_changed', target: id, metadata: { status, etaMin } })
   return ok({ status })

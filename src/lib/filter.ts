@@ -97,9 +97,9 @@ export async function resolveClinicFromNumber(phoneNumber: string): Promise<stri
  * Dedup inbound messages by provider message ID.
  * Uses in-memory store with 24h TTL (founder doc §7).
  */
-export function isDuplicateMessage(providerMsgId: string): boolean {
+export async function isDuplicateMessage(providerMsgId: string): Promise<boolean> {
   const key = `msg:dedup:${providerMsgId}`
-  if (store.get(key)) return true
-  store.set(key, true, 24 * 60 * 60) // 24h TTL
+  if (await store.get(key)) return true
+  await store.set(key, true, 24 * 60 * 60) // 24h TTL
   return false
 }

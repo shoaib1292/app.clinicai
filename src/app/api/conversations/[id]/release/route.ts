@@ -11,7 +11,7 @@ async function release(_req: NextRequest, { params }: { params: Promise<{ id: st
   if (!convo) return err('Not found', 404)
 
   await db.conversation.update({ where: { id }, data: { takenOverBy: null } })
-  store.del(`agent:paused:${clinicId}:${convo.patientId}`)
+  await store.del(`agent:paused:${clinicId}:${convo.patientId}`)
 
   await auditLog({ actorId: session.sub, actorType: session.type, clinicId, action: 'conversation_released', target: id })
   return ok({ released: true })

@@ -42,7 +42,7 @@ async function cancel(req: NextRequest, { params }: { params: Promise<{ id: stri
   // ── Google Calendar Sync (async, non-blocking) ──
   syncCalendarCancel(id, clinicId).catch(() => {})
 
-  store.publish(`clinic:${clinicId}:queue`, { type: 'slot_cancelled', appointmentId: id, slotId: appt.slotId })
+  await store.publish(`clinic:${clinicId}:queue`, { type: 'slot_cancelled', appointmentId: id, slotId: appt.slotId })
 
   // ── Void referral event ──
   const referralEvent = await db.referralEvent.findUnique({ where: { appointmentId: id } })

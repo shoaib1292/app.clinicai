@@ -1,9 +1,5 @@
-import { MorphingSquare } from '@/components/ui/morphing-square'
+import { DashboardPageSkeleton } from '@/components/ui/dashboard-skeleton'
 
 export default function PlatformLoading() {
-  return (
-    <div className="flex h-[60vh] items-center justify-center">
-      <MorphingSquare message="Loading platform..." />
-    </div>
-  )
+  return <DashboardPageSkeleton message="Loading platform..." />
 }

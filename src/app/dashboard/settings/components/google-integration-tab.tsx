@@ -13,7 +13,7 @@ interface GoogleStatus {
   email?: string
   status?: string
   features?: Record<string, boolean>
-  scopes?: string
+  scopes?: string | string[]
   health?: {
     tokenValid: boolean
     tokenExpiringSoon: boolean
@@ -240,14 +240,20 @@ export function GoogleIntegrationTab({ clinicId }: { clinicId: string }) {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            {status.scopes?.split(' ').filter(Boolean).map(scope => (
-              <div key={scope} className="flex items-center gap-2">
-                <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                <span className="text-muted-foreground">{scope.replace('https://www.googleapis.com/auth/', '')}</span>
-              </div>
-            )) || (
-              <p className="text-sm text-muted-foreground">No scopes granted yet.</p>
-            )}
+            {(() => {
+              const scopes = Array.isArray(status.scopes)
+                ? status.scopes
+                : (status.scopes || '').split(' ').filter(Boolean)
+              if (scopes.length === 0) {
+                return <p className="text-sm text-muted-foreground">No scopes granted yet.</p>
+              }
+              return scopes.map((scope) => (
+                <div key={scope} className="flex items-center gap-2">
+                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                  <span className="text-muted-foreground">{scope.replace('https://www.googleapis.com/auth/', '')}</span>
+                </div>
+              ))
+            })()}
           </div>
         </CardContent>
       </Card>

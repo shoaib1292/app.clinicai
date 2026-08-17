@@ -31,11 +31,11 @@ interface Clinic {
 }
 
 const SETTINGS_TABS: { value: string; label: string; icon: React.ComponentType<{ className?: string }>; description: string; clinicAdminOnly?: boolean }[] = [
-  { value: 'clinic-profile', label: 'Clinic Profile', icon: Building2, description: 'Logo, basic info, and regional settings.' },
-  { value: 'branding', label: 'Branding & Info', icon: Palette, description: 'Colors, fonts, doctor branding, agent persona, and stats.' },
+  { value: 'clinic-profile', label: 'Clinic Profile', icon: Building2, description: 'Logo, basic info, and regional settings.', clinicAdminOnly: true },
+  { value: 'branding', label: 'Branding & Info', icon: Palette, description: 'Colors, fonts, doctor branding, agent persona, and stats.', clinicAdminOnly: true },
   { value: 'google-integration', label: 'Google Integration', icon: Globe, description: 'Calendar sync, Meet, Gmail, Drive, and more.', clinicAdminOnly: true },
-  { value: 'features-toggle', label: 'Features Toggle', icon: ToggleLeft, description: 'Turn agent and payments features on or off.' },
-  { value: 'working-hours', label: 'Working Hours', icon: CalendarClock, description: 'Clinic-wide default availability and breaks.' },
+  { value: 'features-toggle', label: 'Features Toggle', icon: ToggleLeft, description: 'Turn agent and payments features on or off.', clinicAdminOnly: true },
+  { value: 'working-hours', label: 'Working Hours', icon: CalendarClock, description: 'Clinic-wide default availability and breaks.', clinicAdminOnly: true },
   { value: 'keyboard-shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard, description: 'Speed up your workflow with hotkeys.' },
 ] as const
 
@@ -46,7 +46,10 @@ export function SettingsClient({ clinic, userType, brandingData, initialTab }: {
   initialTab?: string
 }) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<string>(initialTab && SETTINGS_TABS.some((t) => t.value === initialTab) ? initialTab : 'clinic-profile')
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const fallback = userType === 'clinic_admin' ? 'clinic-profile' : 'keyboard-shortcuts'
+    return initialTab && SETTINGS_TABS.some((t) => t.value === initialTab && (!t.clinicAdminOnly || userType === 'clinic_admin')) ? initialTab : fallback
+  })
   const [form, setForm] = useState<SettingsForm>({
     name: clinic?.name || '',
     city: clinic?.city || '',

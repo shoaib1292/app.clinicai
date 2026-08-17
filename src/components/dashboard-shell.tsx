@@ -605,20 +605,17 @@ export function DashboardShell({ userType, userName, clinicName, clinicLogoUrl, 
           </div>
         </header>
 
-        {/* Main content with page transitions */}
+        {/* Main content — animate in only, no exit delay, for snappy tab switches */}
         <div className="flex-1 overflow-y-auto">
-          <AnimatePresence mode="wait">
-            <motion.main
-              key={pathname}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="p-4 lg:p-6"
-            >
-              {children}
-            </motion.main>
-          </AnimatePresence>
+          <motion.main
+            key={pathname}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="p-4 lg:p-6"
+          >
+            {children}
+          </motion.main>
         </div>
 
         <footer className="shrink-0 border-t border-border/60 bg-background/80 backdrop-blur-xl px-4 lg:px-6 py-2.5 text-xs text-muted-foreground flex items-center justify-between" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.625rem)', paddingRight: 'calc(env(safe-area-inset-right, 0px) + 1rem)', paddingLeft: 'calc(env(safe-area-inset-left, 0px) + 1rem)' }}>

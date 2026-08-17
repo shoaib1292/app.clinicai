@@ -1,9 +1,5 @@
-import { MorphingSquare } from '@/components/ui/morphing-square'
+import { DashboardPageSkeleton } from '@/components/ui/dashboard-skeleton'
 
 export default function AppointmentsLoading() {
-  return (
-    <div className="flex h-[60vh] items-center justify-center">
-      <MorphingSquare message="Loading appointments..." />
-    </div>
-  )
+  return <DashboardPageSkeleton message="Loading appointments..." />
 }

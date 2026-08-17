@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { db } from '@/lib/db'
-import { DashboardShell, settingsNav, clinicAdminNav } from '@/components/dashboard-shell'
+import { DashboardShell, settingsNav, clinicAdminNav, platformAdminNav } from '@/components/dashboard-shell'
 import { SettingsClient } from './settings-client'
 
 export const dynamic = 'force-dynamic'
@@ -42,8 +42,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     )
   }
 
+  const isPlatform = session.type === 'platform_admin' || session.type === 'platform_staff'
+
   return (
-    <DashboardShell userType={session.type as any} userName={session.name} navItems={clinicAdminNav}>
+    <DashboardShell userType={session.type as any} userName={session.name} navItems={isPlatform ? platformAdminNav : clinicAdminNav}>
       <SettingsClient clinic={null} userType={session.type} />
     </DashboardShell>
   )

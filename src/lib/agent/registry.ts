@@ -61,7 +61,7 @@ const AGENT_TOOL_NAMES: Record<AgentName, string[]> = {
     'list_available_slots', 'book_appointment', 'cancel_appointment',
     'reschedule_appointment', 'get_live_queue_status', 'get_doctor_status',
     'get_family_member', 'add_family_member', 'get_patient_history',
-    'set_reminder_preference',
+    'set_reminder_preference', 'update_patient_profile', 'send_portal_link',
   ],
   billing: [
     'get_clinic_info', 'attach_payment_proof', 'get_patient_history',

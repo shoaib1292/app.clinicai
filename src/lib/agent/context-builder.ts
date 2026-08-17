@@ -27,6 +27,11 @@ export async function buildPatientContext(ctx: AgentContext): Promise<{ context:
   patientName = patient.name || undefined
   context = `\n\nPATIENT CONTEXT:\nName: ${patient.name || 'Unknown'}\nGender: ${patient.gender}\nPhone: ${patient.phone}\nNo-show count: ${patient.noShowCount}\nTotal visits: ${patient.totalVisits}`
 
+  // hasPortal = this WhatsApp number is already linked to a patient portal account.
+  // Drives the agent: don't re-send the portal link if already linked.
+  const hasPortal = !!patient.appUserId
+  context += `\nPatient portal account: ${hasPortal ? 'LINKED — do NOT send the portal link again; only recommend portal features (live queue, booking history, self-serve)' : 'NOT LINKED — you MAY offer the portal link via send_portal_link when self-serve value appears (e.g. live queue, booking history)'}.`
+
   // ── LEARNED MEMORY (cost-optimized: 1 cheap read, 1-2 lines injected) ──
   // This is what makes the agent feel like it "knows" the patient across
   // conversations without re-reading raw history or calling the LLM again.

@@ -191,16 +191,31 @@ export const TOOLS = [
   {
     type: 'function' as const,
     function: {
-      name: 'send_portal_link',
-      description: 'Send the patient a portal link where they can book appointments, view live queue, and manage their visits — like a mobile app. Call this when patient asks for "link", "portal", "app", "online booking", "apna hisaab", or wants to self-serve.',
+      name: 'update_patient_profile',
+      description: 'Save the patient name/email/gender collected during chat so their portal profile is pre-filled. Call whenever the patient tells you their name or email. Do NOT call if the value is already known from PATIENT CONTEXT.',
       parameters: {
         type: 'object',
         properties: {
-          appUserId: { type: 'string', description: 'Patient AppUser ID from context' },
-          clinicId: { type: 'string', description: 'Clinic ID from context' },
-          patientPhone: { type: 'string', description: 'Patient WhatsApp number to send the link to' },
+          patientPhone: { type: 'string', description: 'Patient WhatsApp number (from context)' },
+          name: { type: 'string', description: 'Patient full name' },
+          email: { type: 'string', description: 'Patient email for transactional messages (optional)' },
+          gender: { type: 'string', enum: ['male', 'female', 'unknown'], description: 'Patient gender' },
         },
-        required: ['appUserId', 'clinicId', 'patientPhone'],
+        required: ['patientPhone'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'send_portal_link',
+      description: 'Send the patient a portal login link via WhatsApp where they can book appointments, view live queue, and manage their visits — like a mobile app. Only call when PATIENT CONTEXT says portal account is NOT LINKED. Call this when patient asks for "link", "portal", "app", "online booking", "apna hisaab", or wants to self-serve.',
+      parameters: {
+        type: 'object',
+        properties: {
+          patientPhone: { type: 'string', description: 'Patient WhatsApp number to send the link to (from context)' },
+        },
+        required: ['patientPhone'],
       },
     },
   },

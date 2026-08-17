@@ -1,8 +1,10 @@
 import { db } from '../db'
 import { store } from '../store'
 import { hashPhone, decrypt, last4, randomToken } from '../auth'
+import { normalizePhone } from '../phone-utils'
 import { encryptPhone } from '../phone-encryption'
 import { decryptPhone } from '../phone-encryption'
+import { sendEvolutionMessage } from '../evolution'
 import { computeFees, generateSlotsForDoctorDate, computeRefund, resolveDuration, findBlockingOverride } from '../schedule'
 import { publishAppointmentBooked } from '../automation-publisher'
 import type { AgentContext } from './types'
@@ -823,12 +825,41 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
       })
     }
 
-    case 'send_portal_link': {
-      const appUserId = args.appUserId as string
+    case 'update_patient_profile': {
       const patientPhone = args.patientPhone as string
+      if (!patientPhone || !clinicId) {
+        return JSON.stringify({ error: 'patientPhone and clinicId are required' })
+      }
+      const name = (args.name as string)?.trim()
+      const email = (args.email as string)?.trim().toLowerCase()
+      const gender = (args.gender as string)?.trim()
 
-      if (!appUserId || !clinicId || !patientPhone) {
-        return JSON.stringify({ error: 'appUserId, clinicId, and patientPhone are required' })
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return JSON.stringify({ error: 'Invalid email format' })
+      }
+      if (gender && !['male', 'female', 'unknown'].includes(gender)) {
+        return JSON.stringify({ error: 'gender must be male|female|unknown' })
+      }
+
+      const phoneHash = hashPhone(patientPhone + clinicId)
+      const patient = await db.patient.findUnique({
+        where: { clinicId_phoneHash: { clinicId, phoneHash } },
+      })
+      if (!patient) return JSON.stringify({ error: 'Patient not found' })
+
+      const data: Record<string, unknown> = {}
+      if (name) data.name = name
+      if (email) data.email = email
+      if (gender) data.gender = gender
+
+      const updated = await db.patient.update({ where: { id: patient.id }, data })
+      return JSON.stringify({ ok: true, updated: { name: updated.name, email: updated.email } })
+    }
+
+    case 'send_portal_link': {
+      const patientPhone = args.patientPhone as string
+      if (!patientPhone || !clinicId) {
+        return JSON.stringify({ error: 'patientPhone and clinicId are required' })
       }
 
       const clinic = await db.clinic.findUnique({ where: { id: clinicId } })
@@ -840,21 +871,53 @@ export async function executeTool(name: string, args: Record<string, unknown>, c
         })
       }
 
+      // ── Resolve/create the cross-clinic PatientAppUser (global phone identity) ──
+      const normPhone = normalizePhone(patientPhone)
+      const appPhoneHash = hashPhone(normPhone)
+      let appUser = await db.patientAppUser.findUnique({ where: { phoneHash: appPhoneHash } })
+      if (!appUser) {
+        appUser = await db.patientAppUser.create({ data: { phone: normPhone, phoneHash: appPhoneHash } })
+      }
+
+      // ── Link the existing clinic-scoped Patient to this app account ──
+      // (reconciliation so subsequent chats see hasPortal = true)
+      const patientPhoneHash = hashPhone(patientPhone + clinicId)
+      const patient = await db.patient.findUnique({
+        where: { clinicId_phoneHash: { clinicId, phoneHash: patientPhoneHash } },
+      })
+      if (patient && !patient.appUserId) {
+        await db.patient.update({ where: { id: patient.id }, data: { appUserId: appUser.id } })
+      }
+
+      // ── Create single-use magic link (15-min TTL) ──
       const token = randomToken(32)
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
-
       await db.patientMagicLink.create({
-        data: { token, appUserId, clinicId, phone: patientPhone, expiresAt },
+        data: { token, appUserId: appUser.id, clinicId, phone: normPhone, expiresAt },
       })
 
       const domain = process.env.DOMAIN || 'localhost:8000'
       const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
       const link = `${protocol}://${domain}/p/${clinic.slug}?t=${token}`
 
+      // ── Send directly via WhatsApp for reliable delivery ──
+      const linkMsg = `Assalamu alaikum! Aap ka patient portal tayar hai. Is link par tap karein aur apni appointments manage karein, live queue dekhein: ${link}\n(Ye link 15 minute valid hai)`
+      let sent = false
+      const connection = await db.whatsAppConnection.findFirst({
+        where: { clinicId, mode: 'evo', status: 'connected' },
+        select: { evoInstanceName: true },
+      })
+      if (connection?.evoInstanceName) {
+        const res = await sendEvolutionMessage(connection.evoInstanceName, patientPhone, linkMsg)
+        sent = !!res.ok
+      }
+
       return JSON.stringify({
         success: true,
-        link,
-        message: `Yeh raha aap ka portal link: ${link}. Is par click karein aur apni appointments manage karein, live queue dekhein, aur booking karein — bilkul mobile app ki tarah!`,
+        sent,
+        message: sent
+          ? 'Portal link bhej diya hai, WhatsApp par check karein.'
+          : `Portal link: ${link}`,
       })
     }
 

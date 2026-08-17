@@ -99,6 +99,11 @@ export async function runAgentSingle(opts: {
     })
     if (patient) {
       patientContext = `\n\nPATIENT CONTEXT:\nName: ${patient.name || 'Unknown'}\nGender: ${patient.gender}\nPhone: ${patient.phone}\nNo-show count: ${patient.noShowCount}\nTotal visits: ${patient.totalVisits}`
+
+      // hasPortal = this WhatsApp number is already linked to a patient portal account.
+      // Drives the agent: don't re-send the portal link if already linked.
+      const hasPortal = !!patient.appUserId
+      patientContext += `\nPatient portal account: ${hasPortal ? 'LINKED — do NOT send the portal link again; only recommend portal features (live queue, booking history, self-serve)' : 'NOT LINKED — you MAY offer the portal link via send_portal_link when self-serve value appears (e.g. live queue, booking history)'}.`
       if (patient.familyMembers.length > 0) {
         patientContext += `\n\nREGISTERED FAMILY MEMBERS (use these names when booking for them):`
         for (const fm of patient.familyMembers) {

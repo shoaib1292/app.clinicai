@@ -641,6 +641,7 @@ export const platformAdminNav: NavItem[] = [
   { label: 'Platform Staff', href: '/dashboard/platform/staff', icon: UserCog },
   { label: 'Platform Calendar', href: '/dashboard/platform/calendar', icon: CalendarCheck },
   { label: 'Leads', href: '/dashboard/platform/leads', icon: Activity },
+  { label: 'Blog', href: '/dashboard/platform/blogs', icon: FileText },
   { label: 'Analytics', href: '/dashboard/platform/analytics', icon: BarChart3 },
   { label: 'Audit Log', href: '/dashboard/platform/audit', icon: ShieldAlert },
 ]

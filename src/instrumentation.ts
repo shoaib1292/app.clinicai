@@ -21,6 +21,14 @@ export async function register() {
     } catch (e) {
       console.error('[boot] ensurePlatformAdmin failed:', e)
     }
+
+    // Backfill starter marketing posts into the shared blog table.
+    try {
+      const { ensureStarterBlogPosts } = await import('@/lib/ensure-blog-posts')
+      await ensureStarterBlogPosts()
+    } catch (e) {
+      console.error('[boot] ensureStarterBlogPosts failed:', e)
+    }
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {

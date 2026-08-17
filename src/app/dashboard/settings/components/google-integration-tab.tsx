@@ -162,9 +162,6 @@ export function GoogleIntegrationTab({ clinicId }: { clinicId: string }) {
               {status.health?.tokenValid
                 ? <span className="text-green-600 font-medium">Valid</span>
                 : <span className="text-red-600 font-medium">Expired</span>}
-              {status.health?.tokenExpiringSoon && (
-                <Badge variant="outline" className="ml-2 text-amber-600 border-amber-300">Expiring soon</Badge>
-              )}
             </div>
             <div>
               <span className="text-muted-foreground">Connected: </span>

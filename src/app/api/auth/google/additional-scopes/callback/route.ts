@@ -36,18 +36,18 @@ export async function GET(req: NextRequest) {
 
   if (error || !code || !state) {
     console.error('[additional-scopes] Missing code or state:', { error, code: !!code, state })
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
+    return NextResponse.redirect(new URL('/dashboard/settings?tab=google-integration&google=error', requestOrigin(req)))
   }
 
   const connectionId = state
   const connection = await db.googleConnection.findUnique({
     where: { id: connectionId },
-    select: { id: true, clinicId: true, googleEmail: true },
+    select: { id: true, clinicId: true, googleEmail: true, scopeSnapshot: true },
   })
 
   if (!connection) {
     console.error('[additional-scopes] Connection not found:', connectionId)
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
+    return NextResponse.redirect(new URL('/dashboard/settings?tab=google-integration&google=error', requestOrigin(req)))
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
   const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:8000'}/api/auth/google/additional-scopes/callback`
 
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
+    return NextResponse.redirect(new URL('/dashboard/settings?tab=google-integration&google=error', requestOrigin(req)))
   }
 
   try {
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
 
     if (tokens.error || !tokens.access_token) {
       console.error('[additional-scopes] Token exchange failed:', tokens)
-      return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
+      return NextResponse.redirect(new URL('/dashboard/settings?tab=google-integration&google=error', requestOrigin(req)))
     }
 
     // Store new tokens alongside existing Account
@@ -100,6 +100,13 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    // Merge newly granted scopes with what the connection already has. The
+    // incremental OAuth response only contains the scopes granted in this
+    // request, so overwriting would drop previously granted scopes.
+    const existingScopes = (connection.scopeSnapshot || '').split(' ').filter(Boolean)
+    const newScopes = (tokens.scope || '').split(' ').filter(Boolean)
+    const mergedScopes = [...new Set([...existingScopes, ...newScopes])].join(' ')
+
     // Store in GoogleToken for connection-scoped access
     const { encrypt } = await import('@/lib/auth')
     await db.googleToken.create({
@@ -107,7 +114,7 @@ export async function GET(req: NextRequest) {
         connectionId: connection.id,
         accessToken: encrypt(tokens.access_token),
         refreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
-        scope: tokens.scope || '',
+        scope: mergedScopes,
         expiresAt: new Date(Date.now() + 3600 * 1000),
       },
     })
@@ -116,12 +123,12 @@ export async function GET(req: NextRequest) {
     await db.googleConnection.update({
       where: { id: connection.id },
       data: {
-        scopeSnapshot: tokens.scope || '',
+        scopeSnapshot: mergedScopes,
       },
     })
 
-    // Auto-enable features based on granted scopes
-    const scopeStr = tokens.scope || ''
+    // Auto-enable features based on the full set of granted scopes
+    const scopeStr = mergedScopes
     const updates: Record<string, boolean> = {}
     if (scopeStr.includes('calendar')) updates.calendarEnabled = true
     if (scopeStr.includes('gmail.send')) updates.gmailEnabled = true
@@ -145,9 +152,9 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=connected', requestOrigin(req)))
+    return NextResponse.redirect(new URL('/dashboard/settings?tab=google-integration&google=connected', requestOrigin(req)))
   } catch (e) {
     console.error('[additional-scopes] Error:', e)
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
+    return NextResponse.redirect(new URL('/dashboard/settings?tab=google-integration&google=error', requestOrigin(req)))
   }
 }

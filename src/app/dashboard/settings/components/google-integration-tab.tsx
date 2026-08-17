@@ -120,9 +120,17 @@ export function GoogleIntegrationTab({ clinicId }: { clinicId: string }) {
             <div className="flex-1">
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Not connected</p>
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                Go back to the login page and sign in with Google to connect your account.
+                Connect your Google account to unlock Calendar, Meet, Gmail, Drive, and Contacts.
               </p>
             </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                window.location.href = `/api/auth/google-redirect?from=connect&clinicId=${clinicId}`
+              }}
+            >
+              Connect Google
+            </Button>
           </div>
         </CardContent>
       </Card>

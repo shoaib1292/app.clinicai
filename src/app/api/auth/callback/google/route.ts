@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { signSession, SESSION_COOKIE, hashPhone } from '@/lib/auth'
+import { signSession, SESSION_COOKIE, encrypt } from '@/lib/auth'
 import { auditLog } from '@/lib/session'
 import { requestOrigin } from '@/lib/request-url'
+import { GOOGLE_BASE_SCOPES } from '@/lib/google-scopes'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
     })
 
     const tokens = await tokenRes.json() as {
-      access_token?: string; refresh_token?: string; id_token?: string; error?: string
+      access_token?: string; refresh_token?: string; id_token?: string; scope?: string; error?: string
     }
     if (tokens.error || !tokens.access_token) {
       console.error('[Google Callback] Token exchange failed:', tokens)
@@ -74,7 +75,8 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // Upsert OAuth Account
+    // Upsert OAuth Account (only base identity scopes; integration scopes live
+    // in GoogleConnection + GoogleToken below).
     await db.account.upsert({
       where: { provider_providerAccountId: { provider: 'google', providerAccountId: googleUser.id! } },
       create: {
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
         providerAccountId: googleUser.id!, access_token: tokens.access_token,
         refresh_token: tokens.refresh_token || null,
         expires_at: Math.floor(Date.now() / 1000) + 3600,
-        token_type: 'Bearer', scope: 'openid profile email',
+        token_type: 'Bearer', scope: GOOGLE_BASE_SCOPES.join(' '),
       },
       update: {
         access_token: tokens.access_token,
@@ -93,6 +95,12 @@ export async function GET(req: NextRequest) {
 
     // Link User to existing role
     await linkExistingUser(email, user.id)
+
+    // ── Connect flow: create/refresh the GoogleConnection + token ──
+    const connectMatch = /^connect:([^:]+):([^:]+)/.exec(state)
+    if (connectMatch) {
+      return handleConnect(req, connectMatch[1], connectMatch[2], email, user.id, tokens)
+    }
 
     // ── Route by state ──
     if (state === 'booking') {
@@ -105,6 +113,94 @@ export async function GET(req: NextRequest) {
     console.error('[Google Callback] Unexpected error:', e)
     return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
   }
+}
+
+// ── GOOGLE CONNECT (integration scopes granted) ──
+async function handleConnect(
+  req: NextRequest,
+  clinicId: string,
+  source: string,
+  email: string,
+  userId: string,
+  tokens: { access_token?: string; refresh_token?: string; scope?: string },
+) {
+  const grantedScope = tokens.scope || GOOGLE_BASE_SCOPES.join(' ')
+  const expiresAt = new Date(Date.now() + 3600 * 1000)
+
+  // Verify the clinic actually belongs to this admin.
+  const admin = await db.clinicAdmin.findFirst({
+    where: { email, clinicId },
+    select: { id: true },
+  })
+  if (!admin) {
+    return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
+  }
+
+  const connection = await db.googleConnection.upsert({
+    where: { userId_clinicId: { userId, clinicId } },
+    create: {
+      userId,
+      clinicId,
+      googleEmail: email,
+      scopeSnapshot: grantedScope,
+      status: 'active',
+    },
+    update: {
+      googleEmail: email,
+      scopeSnapshot: grantedScope,
+      status: 'active',
+      lastError: null,
+      lastErrorAt: null,
+    },
+  })
+
+  if (!tokens.access_token) {
+    return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
+  }
+
+  await db.googleToken.create({
+    data: {
+      connectionId: connection.id,
+      accessToken: encrypt(tokens.access_token),
+      refreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
+      scope: grantedScope,
+      expiresAt,
+    },
+  })
+
+  // Auto-enable features whose scopes were just granted. Gmail and Business
+  // are restricted scopes and are enabled via the incremental consent flow.
+  const featureUpdates: Record<string, boolean> = {}
+  if (grantedScope.includes('calendar')) {
+    featureUpdates.calendarEnabled = true
+    featureUpdates.meetEnabled = true
+  }
+  if (grantedScope.includes('drive')) featureUpdates.driveEnabled = true
+  if (grantedScope.includes('contacts')) featureUpdates.contactsEnabled = true
+  if (grantedScope.includes('gmail.send')) featureUpdates.gmailEnabled = true
+  if (grantedScope.includes('business.manage')) featureUpdates.businessEnabled = true
+
+  if (Object.keys(featureUpdates).length > 0) {
+    await db.googleConnection.update({
+      where: { id: connection.id },
+      data: featureUpdates,
+    })
+  }
+
+  await db.googleAuditLog.create({
+    data: {
+      clinicId,
+      connectionId: connection.id,
+      action: 'scope_granted',
+      metadata: JSON.stringify({ scopes: grantedScope, enabledFeatures: Object.keys(featureUpdates) }),
+    },
+  })
+
+  const redirectPath = source === 'onboarding'
+    ? '/onboarding?step=8&google=connected'
+    : '/dashboard/settings?tab=google-integration&google=connected'
+
+  return NextResponse.redirect(new URL(redirectPath, requestOrigin(req)))
 }
 
 // ── STAFF SIGN-IN ──

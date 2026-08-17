@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { store } from '@/lib/store'
+import { requestOrigin } from '@/lib/request-url'
 
 const SESSION_COOKIE = 'clinicsai_session'
 const REFRESH_COOKIE = 'clinicsai_refresh'
@@ -279,7 +280,7 @@ async function proxy(request: NextRequest) {
     }
 
     // Dashboard page routes without a valid session → redirect to login.
-    const loginUrl = new URL('/login', request.url)
+    const loginUrl = new URL('/login', requestOrigin(request))
     loginUrl.searchParams.set('redirect', pathname)
     const redir = NextResponse.redirect(loginUrl)
     return addCorsHeaders(redir, origin)

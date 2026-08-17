@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requestOrigin } from '@/lib/request-url'
 
 const SCOPES_MAP: Record<string, string[]> = {
   calendar: [
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   if (error || !code || !state) {
     console.error('[additional-scopes] Missing code or state:', { error, code: !!code, state })
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', req.url))
+    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
   }
 
   const connectionId = state
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   if (!connection) {
     console.error('[additional-scopes] Connection not found:', connectionId)
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', req.url))
+    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
   const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:8000'}/api/auth/google/additional-scopes/callback`
 
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', req.url))
+    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
   }
 
   try {
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
 
     if (tokens.error || !tokens.access_token) {
       console.error('[additional-scopes] Token exchange failed:', tokens)
-      return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', req.url))
+      return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
     }
 
     // Store new tokens alongside existing Account
@@ -144,9 +145,9 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=connected', req.url))
+    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=connected', requestOrigin(req)))
   } catch (e) {
     console.error('[additional-scopes] Error:', e)
-    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', req.url))
+    return NextResponse.redirect(new URL('/dashboard/clinic/settings?google=error', requestOrigin(req)))
   }
 }

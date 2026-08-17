@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { signSession, SESSION_COOKIE, hashPhone } from '@/lib/auth'
 import { auditLog } from '@/lib/session'
+import { requestOrigin } from '@/lib/request-url'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   if (error || !code) {
     console.error('[Google Callback] Error or no code:', error)
-    return NextResponse.redirect(new URL('/login?error=google', req.url))
+    return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   if (!clientId || !clientSecret) {
     console.error('[Google Callback] Missing credentials')
-    return NextResponse.redirect(new URL('/login?error=google', req.url))
+    return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
   }
 
   try {
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
     }
     if (tokens.error || !tokens.access_token) {
       console.error('[Google Callback] Token exchange failed:', tokens)
-      return NextResponse.redirect(new URL('/login?error=google', req.url))
+      return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
     }
 
     // Get user info
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
     }
     if (googleUser.error || !googleUser.email) {
       console.error('[Google Callback] User info failed:', googleUser)
-      return NextResponse.redirect(new URL('/login?error=google', req.url))
+      return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
     }
 
     const email = googleUser.email.toLowerCase().trim()
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
 
   } catch (e) {
     console.error('[Google Callback] Unexpected error:', e)
-    return NextResponse.redirect(new URL('/login?error=google', req.url))
+    return NextResponse.redirect(new URL('/login?error=google', requestOrigin(req)))
   }
 }
 
@@ -114,7 +115,7 @@ async function handleStaffSignIn(req: NextRequest, email: string, name: string, 
   if (admin) {
     const token = signSession({ sub: admin.id, type: 'platform_admin', role: admin.role, email, name: admin.name })
     await auditLog({ actorId: admin.id, actorType: 'platform_admin', action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/platform', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/platform', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
@@ -123,17 +124,17 @@ async function handleStaffSignIn(req: NextRequest, email: string, name: string, 
   if (staff) {
     const token = signSession({ sub: staff.id, type: 'platform_staff', role: staff.role, email, name: staff.name })
     await auditLog({ actorId: staff.id, actorType: 'platform_staff', action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/platform', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/platform', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
 
   const cadmin = await db.clinicAdmin.findUnique({ where: { email } })
   if (cadmin) {
-    if (!cadmin.active) return NextResponse.redirect(new URL('/login?error=Account disabled', req.url))
+    if (!cadmin.active) return NextResponse.redirect(new URL('/login?error=Account disabled', requestOrigin(req)))
     const token = signSession({ sub: cadmin.id, type: 'clinic_admin', clinicId: cadmin.clinicId, email, name: cadmin.name })
     await auditLog({ actorId: cadmin.id, actorType: 'clinic_admin', clinicId: cadmin.clinicId, action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/clinic', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/clinic', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
@@ -142,53 +143,53 @@ async function handleStaffSignIn(req: NextRequest, email: string, name: string, 
   if (doc) {
     const token = signSession({ sub: doc.id, type: 'doctor', clinicId: doc.clinicId, email, name: doc.name })
     await auditLog({ actorId: doc.id, actorType: 'doctor', clinicId: doc.clinicId, action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/doctor', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/doctor', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
 
   const rec = await db.receptionist.findUnique({ where: { email } })
   if (rec) {
-    if (!rec.active) return NextResponse.redirect(new URL('/login?error=Account disabled', req.url))
+    if (!rec.active) return NextResponse.redirect(new URL('/login?error=Account disabled', requestOrigin(req)))
     const token = signSession({ sub: rec.id, type: 'receptionist', clinicId: rec.clinicId, email, name: rec.name })
     await auditLog({ actorId: rec.id, actorType: 'receptionist', clinicId: rec.clinicId, action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/receptionist', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/receptionist', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
 
   const pharm = await db.pharmacist.findUnique({ where: { email } })
   if (pharm) {
-    if (!pharm.active) return NextResponse.redirect(new URL('/login?error=Account disabled', req.url))
+    if (!pharm.active) return NextResponse.redirect(new URL('/login?error=Account disabled', requestOrigin(req)))
     const token = signSession({ sub: pharm.id, type: 'pharmacist', clinicId: pharm.clinicId, email, name: pharm.name })
     await auditLog({ actorId: pharm.id, actorType: 'pharmacist', clinicId: pharm.clinicId, action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/pharmacist', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/pharmacist', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
 
   const lab = await db.labAdmin.findUnique({ where: { email } })
   if (lab) {
-    if (!lab.active) return NextResponse.redirect(new URL('/login?error=Account disabled', req.url))
+    if (!lab.active) return NextResponse.redirect(new URL('/login?error=Account disabled', requestOrigin(req)))
     const token = signSession({ sub: lab.id, type: 'lab_admin', clinicId: lab.clinicId, email, name: lab.name })
     await auditLog({ actorId: lab.id, actorType: 'lab_admin', clinicId: lab.clinicId, action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/lab-admin', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/lab-admin', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
 
   const acct = await db.accountant.findUnique({ where: { email } })
   if (acct) {
-    if (!acct.active) return NextResponse.redirect(new URL('/login?error=Account disabled', req.url))
+    if (!acct.active) return NextResponse.redirect(new URL('/login?error=Account disabled', requestOrigin(req)))
     const token = signSession({ sub: acct.id, type: 'accountant', clinicId: acct.clinicId, email, name: acct.name })
     await auditLog({ actorId: acct.id, actorType: 'accountant', clinicId: acct.clinicId, action: 'login_google', ip })
-    const res = NextResponse.redirect(new URL('/dashboard/accountant', req.url))
+    const res = NextResponse.redirect(new URL('/dashboard/accountant', requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   }
 
   // ── No staff role found → redirect to signup page (pre-fill email + name) ──
-  const signupUrl = new URL('/signup', req.url)
+  const signupUrl = new URL('/signup', requestOrigin(req))
   signupUrl.searchParams.set('email', email)
   signupUrl.searchParams.set('name', name)
   signupUrl.searchParams.set('provider', 'google')
@@ -231,7 +232,7 @@ async function handlePatientSignIn(req: NextRequest, email: string, name: string
       // No clinic context available — need to find one
       const anyClinic = await db.clinic.findFirst({ select: { id: true } })
       clinicId = anyClinic?.id || ''
-      if (!clinicId) return NextResponse.redirect(new URL('/login?error=No clinic available', req.url))
+      if (!clinicId) return NextResponse.redirect(new URL('/login?error=No clinic available', requestOrigin(req)))
     }
 
     patient = await db.patient.create({
@@ -260,14 +261,14 @@ async function handlePatientSignIn(req: NextRequest, email: string, name: string
 
   // Redirect back to booking page with patient info auto-filled
   if (returnPath) {
-    const res = NextResponse.redirect(new URL(returnPath, req.url))
+    const res = NextResponse.redirect(new URL(returnPath, requestOrigin(req)))
     res.cookies.set(SESSION_COOKIE, patientToken, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     res.cookies.set('google_auth_return', '', { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 0 })
     return res
   }
 
   // Fallback: redirect to patient portal
-  const res = NextResponse.redirect(new URL('/patient-portal', req.url))
+  const res = NextResponse.redirect(new URL('/patient-portal', requestOrigin(req)))
   res.cookies.set(SESSION_COOKIE, patientToken, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
   return res
 }

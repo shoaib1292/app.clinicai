@@ -21,7 +21,13 @@ const notoUrdu = Noto_Nastaliq_Urdu({
 export const metadata: Metadata = {
   title: "ClinicAI — App",
   description: "Login to ClinicAI — manage your clinic appointments, patients, and more.",
-  icons: { icon: "/favicon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   manifest: "/manifest.json",
   robots: { index: false, follow: false },
 };

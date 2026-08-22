@@ -83,8 +83,7 @@ export function AgentChatClient({ clinic }: { clinic: Clinic }) {
     }
   }
 
-  async function resetSession() {
-    await fetch('/api/agent/test', { method: 'POST' })
+  function resetSession() {
     setConversationId(null)
     setMessages([{ id: 'welcome', direction: 'out', body: clinic.agentWelcome, ts: new Date() }])
     toast.success('Session reset')

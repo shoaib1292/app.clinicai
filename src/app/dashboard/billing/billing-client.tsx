@@ -38,6 +38,7 @@ export function BillingClient({ clinic, ledger, invoices, bankAccounts }: {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ amount: '', bankAccountId: '', payerName: clinic.name, notes: '' })
+  const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
   const totalCredit = ledger.filter((e) => e.type === 'credit').reduce((s, e) => s + e.amount, 0)
@@ -47,25 +48,41 @@ export function BillingClient({ clinic, ledger, invoices, bankAccounts }: {
     const amount = Number(form.amount)
     if (!amount || amount <= 0) { toast.error('Enter a valid amount'); return }
     if (!form.payerName) { toast.error('Payer name required'); return }
+    if (!file) { toast.error('Attach the transfer screenshot'); return }
     setLoading(true)
-    const res = await fetch('/api/payments/proof', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clinicId: clinic.id,
-        ledgerType: 'clinic_topup',
-        amount,
-        payerName: form.payerName,
-        screenshotUrl: `/uploads/topup-${Date.now()}.png`,
-        uploadedBy: 'admin',
-      }),
-    })
-    const json = await res.json()
-    setLoading(false)
-    if (!json.ok) { toast.error(json.error || 'Failed to submit'); return }
-    toast.success('Top-up proof submitted. Awaiting finance confirmation.')
-    setOpen(false)
-    setForm({ amount: '', bankAccountId: '', payerName: clinic.name, notes: '' })
-    router.refresh()
+    try {
+      const uploadForm = new FormData()
+      uploadForm.append('file', file)
+      uploadForm.append('type', 'proof')
+      const upRes = await fetch('/api/upload', { method: 'POST', body: uploadForm })
+      const upJson = await upRes.json().catch(() => null)
+      if (!upRes.ok || !upJson?.url) {
+        toast.error(upJson?.error || 'Screenshot upload failed. Please check the file and try again.')
+        return
+      }
+      const res = await fetch('/api/payments/proof', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinicId: clinic.id,
+          ledgerType: 'clinic_topup',
+          amount,
+          payerName: form.payerName,
+          screenshotUrl: upJson.url,
+          uploadedBy: 'admin',
+        }),
+      })
+      const json = await res.json()
+      if (!json.ok) { toast.error(json.error || 'Failed to submit'); return }
+      toast.success('Top-up proof submitted. Awaiting finance confirmation.')
+      setOpen(false)
+      setForm({ amount: '', bankAccountId: '', payerName: clinic.name, notes: '' })
+      setFile(null)
+      router.refresh()
+    } catch {
+      toast.error('Something went wrong. Please check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -118,7 +135,18 @@ export function BillingClient({ clinic, ledger, invoices, bankAccounts }: {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">A placeholder screenshot path will be attached. In production, an upload widget would replace it.</p>
+              <div className="space-y-2">
+                <Label>Transfer Screenshot</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+                {file && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={URL.createObjectURL(file)} alt="Screenshot preview" className="max-h-40 rounded-md border object-contain" />
+                )}
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
